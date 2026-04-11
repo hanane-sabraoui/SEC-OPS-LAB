@@ -1,0 +1,69 @@
+---
+# ============================================================
+# Role: windows_baseline — Win Server 2019 / Win 10 baseline
+# ============================================================
+# WHY: Same rationale as linux_baseline — capture a "before"
+# snapshot. Because we connect via SSH with powershell shell
+# type, we use raw PowerShell commands rather than WinRM-based
+# win_* modules (which require WinRM, not SSH).
+# ============================================================
+
+- name: "[WINDOWS] Verify PowerShell is available via SSH"
+  ansible.builtin.raw: '$PSVersionTable.PSVersion.ToString()'
+  register: ps_version
+  changed_when: false
+
+- name: "[WINDOWS] Display PowerShell version"
+  ansible.builtin.debug:
+    msg: "PowerShell version: {{ ps_version.stdout | trim }}"
+
+- name: "[WINDOWS] Gather OS information"
+  ansible.builtin.raw: |
+    $os = Get-CimInstance Win32_OperatingSystem
+    Write-Output "Hostname : $($env:COMPUTERNAME)"
+    Write-Output "OS       : $($os.Caption)"
+    Write-Output "Version  : $($os.Version)"
+    Write-Output "Build    : $($os.BuildNumber)"
+  register: os_info
+  changed_when: false
+
+- name: "[WINDOWS] Display OS information"
+  ansible.builtin.debug:
+    msg: "{{ os_info.stdout_lines }}"
+
+- name: "[WINDOWS] Check SSH service status"
+  ansible.builtin.raw: 'Get-Service -Name sshd | Select-Object -Property Status, DisplayName | Format-List'
+  register: ssh_svc
+  changed_when: false
+
+- name: "[WINDOWS] Display SSH service status"
+  ansible.builtin.debug:
+    msg: "{{ ssh_svc.stdout_lines }}"
+
+- name: "[WINDOWS] List listening TCP ports"
+  ansible.builtin.raw: 'Get-NetTCPConnection -State Listen | Select-Object LocalAddress, LocalPort, OwningProcess | Sort-Object LocalPort | Format-Table -AutoSize'
+  register: win_ports
+  changed_when: false
+
+- name: "[WINDOWS] Display listening ports"
+  ansible.builtin.debug:
+    msg: "{{ win_ports.stdout_lines }}"
+
+- name: "[WINDOWS] Check Windows Firewall status"
+  ansible.builtin.raw: 'Get-NetFirewallProfile | Select-Object Name, Enabled | Format-Table -AutoSize'
+  register: fw_status
+  changed_when: false
+
+- name: "[WINDOWS] Display firewall profiles"
+  ansible.builtin.debug:
+    msg: "{{ fw_status.stdout_lines }}"
+
+- name: "[WINDOWS] Detect installed security software"
+  ansible.builtin.raw: 'Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntiVirusProduct -ErrorAction SilentlyContinue | Select-Object displayName | Format-Table -AutoSize'
+  register: av_info
+  changed_when: false
+  ignore_errors: yes
+
+- name: "[WINDOWS] Display security software"
+  ansible.builtin.debug:
+    msg: "{{ av_info.stdout_lines | default(['SecurityCenter2 not available on Server SKUs']) }}"

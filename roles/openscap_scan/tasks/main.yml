@@ -1,0 +1,160 @@
+---
+# ============================================================
+# Role: openscap_scan — Install OpenSCAP & run baseline audit
+# ============================================================
+# WHY: OpenSCAP is the industry-standard SCAP-compliant scanner
+# for Linux. We install it + the SCAP Security Guide (SSG)
+# content, then run an XCCDF evaluation against the CIS profile
+# for Ubuntu 22.04. This produces an HTML report showing the
+# "before hardening" compliance score (Jalon 2 baseline).
+#
+# ANSSI profile is also available in SSG as xccdf_org.ssgproject.content_profile_anssi_bp28_enhanced
+# ============================================================
+
+# --- Step 1: Install required packages ---
+- name: "[OPENSCAP] Install OpenSCAP scanner and SSG content"
+  ansible.builtin.apt:
+    name:
+      - libopenscap8       # OpenSCAP library + oscap CLI
+      - ssg-debderived     # SCAP Security Guide for Debian/Ubuntu
+      - bzip2              # May be needed for OVAL content
+    state: present
+    update_cache: yes
+    cache_valid_time: 3600
+  # WHY: ssg-debderived provides ready-made XCCDF profiles
+  # (CIS, ANSSI) specifically tuned for Debian-based distros.
+
+# --- Step 2: Locate the SSG datastream file ---
+- name: "[OPENSCAP] Find SSG datastream file for Ubuntu"
+  ansible.builtin.find:
+    paths: /usr/share/xml/scap/ssg/content/
+    patterns: "ssg-ubuntu*-ds*.xml"
+  register: ssg_files
+
+- name: "[OPENSCAP] Set datastream path"
+  ansible.builtin.set_fact:
+    ssg_datastream: "{{ ssg_files.files | sort(attribute='path') | last | attr('path') }}"
+  when: ssg_files.matched > 0
+
+- name: "[OPENSCAP] Fail if no SSG content found"
+  ansible.builtin.fail:
+    msg: "No SSG datastream file found in /usr/share/xml/scap/ssg/content/. Check ssg-debderived installation."
+  when: ssg_files.matched == 0
+
+# --- Step 3: List available profiles (informational) ---
+- name: "[OPENSCAP] List available XCCDF profiles"
+  ansible.builtin.command:
+    cmd: "oscap info --profiles {{ ssg_datastream }}"
+  register: available_profiles
+  changed_when: false
+
+- name: "[OPENSCAP] Display available profiles"
+  ansible.builtin.debug:
+    msg: "{{ available_profiles.stdout_lines }}"
+
+# --- Step 4: Create reports directory ---
+- name: "[OPENSCAP] Create reports directory on target"
+  ansible.builtin.file:
+    path: /tmp/openscap_reports
+    state: directory
+    mode: "0755"
+
+# --- Step 5: Run CIS baseline scan ---
+- name: "[OPENSCAP] Run CIS Level 1 Server baseline scan"
+  ansible.builtin.command:
+    cmd: >
+      oscap xccdf eval
+      --profile xccdf_org.ssgproject.content_profile_cis_level1_server
+      --report /tmp/openscap_reports/cis_baseline_report.html
+      --results /tmp/openscap_reports/cis_baseline_results.xml
+      {{ ssg_datastream }}
+  register: cis_scan
+  # oscap returns exit code 2 when some rules fail (expected for
+  # a blank/unhardened system). Only exit code 1 = scanner error.
+  failed_when: cis_scan.rc == 1
+  changed_when: false
+
+- name: "[OPENSCAP] Display CIS scan summary"
+  ansible.builtin.debug:
+    msg: |
+      === CIS Baseline Scan Complete ===
+      Exit code: {{ cis_scan.rc }} (0=all pass, 2=some fail)
+      HTML report: /tmp/openscap_reports/cis_baseline_report.html
+      XML results: /tmp/openscap_reports/cis_baseline_results.xml
+
+# --- Step 6: Run ANSSI BP28 Enhanced baseline scan ---
+- name: "[OPENSCAP] Run ANSSI BP28 Enhanced baseline scan"
+  ansible.builtin.command:
+    cmd: >
+      oscap xccdf eval
+      --profile xccdf_org.ssgproject.content_profile_anssi_bp28_enhanced
+      --report /tmp/openscap_reports/anssi_baseline_report.html
+      --results /tmp/openscap_reports/anssi_baseline_results.xml
+      {{ ssg_datastream }}
+  register: anssi_scan
+  failed_when: anssi_scan.rc == 1
+  changed_when: false
+
+- name: "[OPENSCAP] Display ANSSI scan summary"
+  ansible.builtin.debug:
+    msg: |
+      === ANSSI BP28 Baseline Scan Complete ===
+      Exit code: {{ anssi_scan.rc }} (0=all pass, 2=some fail)
+      HTML report: /tmp/openscap_reports/anssi_baseline_report.html
+      XML results: /tmp/openscap_reports/anssi_baseline_results.xml
+
+# --- Step 7: Generate score summary from XML ---
+- name: "[OPENSCAP] Extract CIS score from XML results"
+  ansible.builtin.shell: |
+    oscap xccdf generate report /tmp/openscap_reports/cis_baseline_results.xml 2>/dev/null | \
+    grep -oP 'Score:.*?[\d.]+' | head -1 || \
+    grep -c 'result="pass"' /tmp/openscap_reports/cis_baseline_results.xml || echo "Score extraction requires manual review of HTML report"
+  register: cis_score_raw
+  changed_when: false
+  ignore_errors: yes
+
+# --- Step 8: Fetch reports to control node ---
+- name: "[OPENSCAP] Ensure local reports directory exists"
+  ansible.builtin.file:
+    path: "{{ playbook_dir }}/../reports/linux/"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  become: no
+
+- name: "[OPENSCAP] Fetch CIS HTML report to control node"
+  ansible.builtin.fetch:
+    src: /tmp/openscap_reports/cis_baseline_report.html
+    dest: "{{ playbook_dir }}/../reports/linux/{{ inventory_hostname }}_cis_baseline.html"
+    flat: yes
+
+- name: "[OPENSCAP] Fetch ANSSI HTML report to control node"
+  ansible.builtin.fetch:
+    src: /tmp/openscap_reports/anssi_baseline_report.html
+    dest: "{{ playbook_dir }}/../reports/linux/{{ inventory_hostname }}_anssi_baseline.html"
+    flat: yes
+
+- name: "[OPENSCAP] Fetch CIS XML results to control node"
+  ansible.builtin.fetch:
+    src: /tmp/openscap_reports/cis_baseline_results.xml
+    dest: "{{ playbook_dir }}/../reports/linux/{{ inventory_hostname }}_cis_baseline.xml"
+    flat: yes
+
+- name: "[OPENSCAP] Fetch ANSSI XML results to control node"
+  ansible.builtin.fetch:
+    src: /tmp/openscap_reports/anssi_baseline_results.xml
+    dest: "{{ playbook_dir }}/../reports/linux/{{ inventory_hostname }}_anssi_baseline.xml"
+    flat: yes
+
+- name: "[OPENSCAP] Baseline scan complete — summary"
+  ansible.builtin.debug:
+    msg: |
+      ╔══════════════════════════════════════════════════════════╗
+      ║          OPENSCAP BASELINE SCAN — COMPLETE              ║
+      ╠══════════════════════════════════════════════════════════╣
+      ║ Host     : {{ inventory_hostname }}
+      ║ Profiles : CIS Level 1 Server + ANSSI BP28 Enhanced
+      ║ Reports fetched to: reports/linux/
+      ║                                                         
+      ║ Open the HTML files in a browser to see full scores.   
+      ╚══════════════════════════════════════════════════════════╝

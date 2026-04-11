@@ -1,0 +1,53 @@
+---
+# ============================================================
+# Role: linux_baseline — Ubuntu 22.04 baseline info gathering
+# ============================================================
+# WHY: Before hardening (Jalon 3) we collect a snapshot of the
+# system state — OS version, kernel, running services, open
+# ports. This serves as the "before" picture to compare with
+# post-hardening audits from OpenSCAP.
+# ============================================================
+
+- name: "[LINUX] Gather OS facts"
+  ansible.builtin.setup:
+    filter:
+      - ansible_distribution*
+      - ansible_kernel
+      - ansible_hostname
+      - ansible_default_ipv4
+
+- name: "[LINUX] Display OS info"
+  ansible.builtin.debug:
+    msg: |
+      Hostname  : {{ ansible_hostname }}
+      OS        : {{ ansible_distribution }} {{ ansible_distribution_version }}
+      Kernel    : {{ ansible_kernel }}
+      IP        : {{ ansible_default_ipv4.address | default('N/A') }}
+
+- name: "[LINUX] Check if SSH service is active"
+  ansible.builtin.systemd:
+    name: sshd
+  register: sshd_status
+  ignore_errors: yes
+
+- name: "[LINUX] Display SSH daemon status"
+  ansible.builtin.debug:
+    msg: "SSHD is {{ sshd_status.status.ActiveState | default('unknown') }}"
+
+- name: "[LINUX] List listening TCP ports"
+  ansible.builtin.command: ss -tlnp
+  register: open_ports
+  changed_when: false
+
+- name: "[LINUX] Display open ports"
+  ansible.builtin.debug:
+    msg: "{{ open_ports.stdout_lines }}"
+
+- name: "[LINUX] Capture installed package count"
+  ansible.builtin.command: dpkg -l
+  register: pkg_list
+  changed_when: false
+
+- name: "[LINUX] Display package count"
+  ansible.builtin.debug:
+    msg: "Installed packages: {{ pkg_list.stdout_lines | length }} entries"

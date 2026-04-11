@@ -1,0 +1,38 @@
+---
+# ============================================================
+# playbooks/site.yml — Master playbook (all hosts, all roles)
+# ============================================================
+# Run: ansible-playbook playbooks/site.yml
+# This orchestrates connectivity checks + baseline collection
+# across every group in a single run.
+# ============================================================
+
+#
+# Phase 1: Linux Servers
+#
+- name: "JALON 1 — Linux Servers: Connectivity & Baseline"
+  hosts: linux_servers
+  gather_facts: no
+  roles:
+    - common
+    - linux_baseline
+
+#
+# Phase 2: Windows Machines
+#
+- name: "JALON 1 — Windows Machines: Connectivity & Baseline"
+  hosts: windows_machines
+  gather_facts: no
+  roles:
+    - common
+    - windows_baseline
+
+#
+# Phase 3: Phones (Termux)
+#
+- name: "JALON 1 — Phones: Connectivity & Info"
+  hosts: phones
+  gather_facts: no
+  roles:
+    - common
+    - phone_check

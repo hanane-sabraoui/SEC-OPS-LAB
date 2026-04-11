@@ -1,0 +1,60 @@
+---
+# ============================================================
+# Login banners — CIS 1.7.x / ANSSI R20
+# ============================================================
+# WHY: Legal banners serve two purposes:
+# 1. Deter unauthorized access with a legal warning.
+# 2. Satisfy compliance requirements (CIS/ANSSI/NIST all
+#    require a pre-authentication warning banner).
+# ============================================================
+
+- name: "[BANNER] Configure /etc/issue (local login)"
+  ansible.builtin.copy:
+    dest: /etc/issue
+    content: |
+      ########################################################
+      #         AUTHORIZED ACCESS ONLY                       #
+      #  This system is for authorized users only.           #
+      #  All activity is monitored and logged.               #
+      #  Unauthorized access is a criminal offense.          #
+      ########################################################
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: "[BANNER] Configure /etc/issue.net (SSH login)"
+  ansible.builtin.copy:
+    dest: /etc/issue.net
+    content: |
+      ########################################################
+      #         AUTHORIZED ACCESS ONLY                       #
+      #  This system is for authorized users only.           #
+      #  All activity is monitored and logged.               #
+      #  Unauthorized access is a criminal offense.          #
+      ########################################################
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: "[BANNER] Configure /etc/motd"
+  ansible.builtin.copy:
+    dest: /etc/motd
+    content: |
+      ========================================================
+            SEC-OPS LAB — Hardened System
+            All activity is subject to monitoring and audit.
+      ========================================================
+    owner: root
+    group: root
+    mode: "0644"
+
+# --- CIS 1.7.4: Remove OS info from banners ---
+- name: "[BANNER] Ensure no OS information in banners"
+  ansible.builtin.replace:
+    path: "{{ item }}"
+    regexp: '\\[mrsv]'
+    replace: ''
+  loop:
+    - /etc/issue
+    - /etc/issue.net
+  # WHY: OS fingerprinting from banners helps attackers target exploits

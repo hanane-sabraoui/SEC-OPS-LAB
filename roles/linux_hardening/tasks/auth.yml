@@ -1,0 +1,109 @@
+---
+# ============================================================
+# Authentication & password policy — CIS 5.3-5.4 / ANSSI R30-R31
+# ============================================================
+# WHY: Weak passwords are the easiest entry point. These
+# controls enforce complexity, aging, lockout, and prevent
+# re-use of compromised passwords.
+# ============================================================
+
+# --- CIS 5.3.1: Ensure password hashing uses SHA-512 ---
+- name: "[AUTH] Ensure PAM uses SHA-512 hashing"
+  ansible.builtin.lineinfile:
+    path: /etc/pam.d/common-password
+    regexp: '^password.*pam_unix\.so'
+    line: "password [success=1 default=ignore] pam_unix.so obscure sha512 shadow remember=5 rounds=65536"
+    state: present
+    backup: yes
+  # WHY: SHA-512 with 65536 rounds makes offline cracking expensive.
+  # remember=5 prevents reusing the last 5 passwords.
+
+# --- CIS 5.3.2: Install and configure pwquality ---
+- name: "[AUTH] Install libpam-pwquality"
+  ansible.builtin.apt:
+    name: libpam-pwquality
+    state: present
+
+- name: "[AUTH] Configure password complexity (pwquality)"
+  ansible.builtin.copy:
+    dest: /etc/security/pwquality.conf
+    content: |
+      # CIS 5.3.2 / ANSSI R31: Password complexity requirements
+      # WHY: Forces users to create passwords resistant to dictionary attacks
+      minlen = {{ harden_pass_min_length }}
+      dcredit = -1    # At least 1 digit
+      ucredit = -1    # At least 1 uppercase
+      lcredit = -1    # At least 1 lowercase
+      ocredit = -1    # At least 1 special character
+      maxrepeat = 3   # Max 3 consecutive identical chars
+      maxclassrepeat = 4
+      enforcing = 1
+    owner: root
+    group: root
+    mode: "0644"
+
+# --- CIS 5.4.1: Password aging ---
+- name: "[AUTH] Configure password aging in login.defs"
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    state: present
+  loop:
+    # WHY PASS_MAX_DAYS: Forces regular password rotation
+    - { regexp: "^PASS_MAX_DAYS", line: "PASS_MAX_DAYS {{ harden_pass_max_days }}" }
+    # WHY PASS_MIN_DAYS: Prevents immediate password change after reset (circumventing history)
+    - { regexp: "^PASS_MIN_DAYS", line: "PASS_MIN_DAYS {{ harden_pass_min_days }}" }
+    # WHY PASS_WARN_AGE: Gives users advance notice before password expires
+    - { regexp: "^PASS_WARN_AGE", line: "PASS_WARN_AGE {{ harden_pass_warn_age }}" }
+    # WHY ENCRYPT_METHOD: SHA-512 for password hashes
+    - { regexp: "^ENCRYPT_METHOD", line: "ENCRYPT_METHOD SHA512" }
+  loop_control:
+    label: "{{ item.line }}"
+
+# --- CIS 5.3.3: Account lockout after failed attempts ---
+- name: "[AUTH] Configure account lockout (pam_faillock)"
+  ansible.builtin.copy:
+    dest: /etc/security/faillock.conf
+    content: |
+      # CIS 5.3.3 / ANSSI R30: Account lockout policy
+      # WHY: Locks accounts after 5 failed attempts — stops brute-force attacks
+      deny = 5
+      unlock_time = 900
+      fail_interval = 900
+      even_deny_root
+      root_unlock_time = 60
+    owner: root
+    group: root
+    mode: "0644"
+
+# --- CIS 5.4.2: Secure default umask ---
+- name: "[AUTH] Set default umask to 027"
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: "^UMASK"
+    line: "UMASK 027"
+    state: present
+  # WHY: umask 027 means new files are not world-readable by default
+
+# --- CIS 5.4.4: Set TMOUT for shell sessions ---
+- name: "[AUTH] Set shell timeout (TMOUT=900)"
+  ansible.builtin.copy:
+    dest: /etc/profile.d/99-hardening-tmout.sh
+    content: |
+      # CIS 5.4.4: Auto-logout idle shell sessions after 15 minutes
+      # WHY: Prevents abandoned terminals from being hijacked
+      readonly TMOUT=900
+      export TMOUT
+    owner: root
+    group: root
+    mode: "0644"
+
+# --- ANSSI R51: Restrict su to wheel/sudo group ---
+- name: "[AUTH] Restrict su command to sudo group (ANSSI R51)"
+  ansible.builtin.lineinfile:
+    path: /etc/pam.d/su
+    regexp: '^#?\s*auth\s+required\s+pam_wheel\.so'
+    line: "auth required pam_wheel.so use_uid group=sudo"
+    state: present
+  # WHY: Only members of 'sudo' group can use su — limits lateral movement

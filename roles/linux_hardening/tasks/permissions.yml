@@ -1,0 +1,96 @@
+---
+# ============================================================
+# File permissions hardening — CIS 6.1.x / ANSSI R54-R57
+# ============================================================
+# WHY: Incorrect file permissions on system files can let
+# non-privileged users read password hashes, modify system
+# configs, or escalate privileges via SUID/SGID binaries.
+# ============================================================
+
+# --- CIS 6.1.1-6.1.9: Critical system file permissions ---
+- name: "[PERMS] Harden permissions on critical system files"
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    # WHY: /etc/passwd is world-readable but must not be world-writable
+    - { path: /etc/passwd,  owner: root, group: root,   mode: "0644" }
+    # WHY: /etc/shadow contains password hashes — only root should read it
+    - { path: /etc/shadow,  owner: root, group: shadow, mode: "0640" }
+    # WHY: /etc/group — same logic as passwd
+    - { path: /etc/group,   owner: root, group: root,   mode: "0644" }
+    # WHY: /etc/gshadow — group password hashes
+    - { path: /etc/gshadow, owner: root, group: shadow, mode: "0640" }
+    # WHY: sshd_config controls SSH behavior — cannot be world-accessible
+    - { path: /etc/ssh/sshd_config, owner: root, group: root, mode: "0600" }
+    # WHY: crontab files can execute commands as root
+    - { path: /etc/crontab, owner: root, group: root, mode: "0600" }
+  loop_control:
+    label: "{{ item.path }} → {{ item.mode }}"
+
+# --- CIS 6.1.2: Ensure permissions on /etc/cron.* directories ---
+- name: "[PERMS] Harden cron directories"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0700"
+    state: directory
+  loop:
+    - /etc/cron.d
+    - /etc/cron.daily
+    - /etc/cron.hourly
+    - /etc/cron.weekly
+    - /etc/cron.monthly
+  ignore_errors: yes
+  # WHY: Only root should be able to add/modify cron jobs
+
+# --- CIS 6.1.10: Restrict at/cron to authorized users only ---
+- name: "[PERMS] Ensure cron.allow exists and has correct permissions"
+  ansible.builtin.copy:
+    dest: /etc/cron.allow
+    content: |
+      root
+      ansible
+    owner: root
+    group: root
+    mode: "0640"
+
+- name: "[PERMS] Ensure at.allow exists and has correct permissions"
+  ansible.builtin.copy:
+    dest: /etc/at.allow
+    content: |
+      root
+      ansible
+    owner: root
+    group: root
+    mode: "0640"
+
+- name: "[PERMS] Remove cron.deny and at.deny (allow files take precedence)"
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - /etc/cron.deny
+    - /etc/at.deny
+
+# --- CIS 6.2.7: Set correct permissions on user home directories ---
+- name: "[PERMS] Ensure root home directory has restricted permissions"
+  ansible.builtin.file:
+    path: /root
+    owner: root
+    group: root
+    mode: "0700"
+  # WHY: Root home may contain sensitive scripts and keys
+
+# --- ANSSI R57: Restrict /boot permissions ---
+- name: "[PERMS] Restrict /boot directory permissions"
+  ansible.builtin.file:
+    path: /boot
+    owner: root
+    group: root
+    mode: "0700"
+    state: directory
+  # WHY: /boot contains the kernel and initrd — modification = rootkit potential

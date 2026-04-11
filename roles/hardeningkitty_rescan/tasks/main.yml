@@ -1,0 +1,138 @@
+---
+# ============================================================
+# Role: hardeningkitty_rescan — Post-hardening CIS rescan
+# ============================================================
+# Same audit as hardeningkitty_scan but saves reports with
+# "post_hardening" prefix for comparison.
+# ============================================================
+
+- name: "[RESCAN-WIN] Run post-hardening CIS audit"
+  ansible.builtin.raw: |
+    Import-Module 'C:\SEC-OPS\HardeningKitty\HardeningKitty.psm1' -Force
+
+    $hkPath = 'C:\SEC-OPS\HardeningKitty'
+    $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+    $reportCsv = "C:\SEC-OPS\reports\cis_post_hardening_$timestamp.csv"
+    $logFile   = "C:\SEC-OPS\reports\cis_post_hardening_$timestamp.log"
+
+    # Auto-detect OS and select finding list
+    $osCaption = (Get-CimInstance Win32_OperatingSystem).Caption
+    if ($osCaption -match 'Server 2019') {
+        $listPattern = 'finding_list_cis_microsoft_windows_server_2019*'
+    } elseif ($osCaption -match 'Server 2022') {
+        $listPattern = 'finding_list_cis_microsoft_windows_server_2022*'
+    } elseif ($osCaption -match 'Windows 10') {
+        $listPattern = 'finding_list_cis_microsoft_windows_10*'
+    } elseif ($osCaption -match 'Windows 11') {
+        $listPattern = 'finding_list_cis_microsoft_windows_11*'
+    } else {
+        $listPattern = 'finding_list_cis*'
+    }
+
+    $findingList = Get-ChildItem "$hkPath\lists\$listPattern" -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (!$findingList) {
+        $findingList = Get-ChildItem "$hkPath\lists\finding_list_cis*" -ErrorAction SilentlyContinue | Select-Object -First 1
+    }
+
+    Write-Output "OS: $osCaption | List: $($findingList.Name)"
+    Write-Output "Running post-hardening audit..."
+
+    Invoke-HardeningKitty -Mode Audit -Log -LogFile $logFile -Report -ReportFile $reportCsv -FileFindingList $findingList.FullName -SkipRestorePoint
+
+    Write-Output "Post-hardening audit complete: $reportCsv"
+  register: hk_rescan
+  changed_when: false
+  async: 600
+  poll: 15
+
+- name: "[RESCAN-WIN] Generate post-hardening HTML report"
+  ansible.builtin.raw: |
+    $latestCsv = Get-ChildItem 'C:\SEC-OPS\reports\cis_post_hardening_*.csv' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if (!$latestCsv) { Write-Output "ERROR: No CSV found"; exit 1 }
+
+    $data = Import-Csv $latestCsv.FullName
+    $total = $data.Count
+    $passed = ($data | Where-Object { $_.TestResult -eq 'Passed' }).Count
+    $failed = ($data | Where-Object { $_.TestResult -eq 'Failed' }).Count
+    $warning = ($data | Where-Object { $_.TestResult -match 'Warning' }).Count
+    $scorePercent = if ($total -gt 0) { [math]::Round(($passed / $total) * 100, 1) } else { 0 }
+
+    Write-Output "========================================"
+    Write-Output "  POST-HARDENING CIS Results"
+    Write-Output "========================================"
+    Write-Output "Total  : $total"
+    Write-Output "Passed : $passed"
+    Write-Output "Failed : $failed"
+    Write-Output "Warning: $warning"
+    Write-Output "SCORE  : $scorePercent %"
+    Write-Output "========================================"
+
+    $htmlPath = $latestCsv.FullName -replace '\.csv$', '.html'
+    $htmlContent = @"
+    <!DOCTYPE html><html><head><title>Post-Hardening CIS — $env:COMPUTERNAME</title>
+    <style>body{font-family:'Segoe UI',Arial,sans-serif;margin:20px;background:#f5f5f5}h1{color:#1a237e}.summary{background:#fff;padding:20px;border-radius:8px;margin:20px 0;box-shadow:0 2px 4px rgba(0,0,0,0.1)}.score{font-size:48px;font-weight:bold;color:$(if($scorePercent -ge 85){'#2e7d32'}elseif($scorePercent -ge 50){'#f57f17'}else{'#c62828'})}table{border-collapse:collapse;width:100%;background:#fff;margin-top:20px}th{background:#1a237e;color:white;padding:12px 8px;text-align:left}td{padding:8px;border-bottom:1px solid #ddd}tr:nth-child(even){background:#f9f9f9}.passed{color:#2e7d32;font-weight:bold}.failed{color:#c62828;font-weight:bold}.warning{color:#f57f17;font-weight:bold}</style></head>
+    <body><h1>Post-Hardening CIS Report</h1><p>Host: <strong>$env:COMPUTERNAME</strong> | Date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') | OS: $((Get-CimInstance Win32_OperatingSystem).Caption)</p>
+    <div class="summary"><div class="score">$scorePercent%</div><p>Passed: $passed | Failed: $failed | Warning: $warning | Total: $total</p></div>
+    <table><tr><th>#</th><th>ID</th><th>Name</th><th>Expected</th><th>Current</th><th>Result</th><th>Severity</th></tr>
+    "@
+
+    $i = 0
+    foreach ($row in $data) {
+        $i++
+        $cls = switch -Regex ($row.TestResult) { 'Passed'{'passed'} 'Failed'{'failed'} default{'warning'} }
+        $htmlContent += "<tr><td>$i</td><td>$($row.ID)</td><td>$($row.Name)</td><td>$($row.Recommended)</td><td>$($row.CurrentValue)</td><td class='$cls'>$($row.TestResult)</td><td>$($row.Severity)</td></tr>`n"
+    }
+    $htmlContent += "</table></body></html>"
+    $htmlContent | Out-File -FilePath $htmlPath -Encoding UTF8 -Force
+    Write-Output "HTML: $htmlPath"
+  register: hk_html
+  changed_when: false
+
+- name: "[RESCAN-WIN] Display post-hardening score"
+  ansible.builtin.debug:
+    msg: "{{ hk_html.stdout_lines }}"
+
+# --- Fetch reports ---
+- name: "[RESCAN-WIN] Ensure local reports directory"
+  ansible.builtin.file:
+    path: "{{ playbook_dir }}/../reports/windows/"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  become: no
+
+- name: "[RESCAN-WIN] Find latest post-hardening CSV"
+  ansible.builtin.raw: |
+    (Get-ChildItem 'C:\SEC-OPS\reports\cis_post_hardening_*.csv' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+  register: ph_csv_path
+  changed_when: false
+
+- name: "[RESCAN-WIN] Find latest post-hardening HTML"
+  ansible.builtin.raw: |
+    (Get-ChildItem 'C:\SEC-OPS\reports\cis_post_hardening_*.html' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+  register: ph_html_path
+  changed_when: false
+
+- name: "[RESCAN-WIN] Fetch post-hardening CSV"
+  ansible.builtin.fetch:
+    src: "{{ ph_csv_path.stdout | trim }}"
+    dest: "{{ playbook_dir }}/../reports/windows/{{ inventory_hostname }}_cis_post_hardening.csv"
+    flat: yes
+  when: ph_csv_path.stdout | trim | length > 0
+
+- name: "[RESCAN-WIN] Fetch post-hardening HTML"
+  ansible.builtin.fetch:
+    src: "{{ ph_html_path.stdout | trim }}"
+    dest: "{{ playbook_dir }}/../reports/windows/{{ inventory_hostname }}_cis_post_hardening.html"
+    flat: yes
+  when: ph_html_path.stdout | trim | length > 0
+
+- name: "[RESCAN-WIN] Post-hardening rescan complete"
+  ansible.builtin.debug:
+    msg: |
+      ╔══════════════════════════════════════════════════════════════╗
+      ║   POST-HARDENING HARDENINGKITTY RESCAN — COMPLETE           ║
+      ╠══════════════════════════════════════════════════════════════╣
+      ║ Host    : {{ inventory_hostname }}
+      ║ Compare reports in reports/windows/ (baseline vs post)
+      ╚══════════════════════════════════════════════════════════════╝

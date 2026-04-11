@@ -1,0 +1,13 @@
+---
+# ============================================================
+# playbooks/windows_check.yml — Windows-only connectivity & info
+# ============================================================
+# Run: ansible-playbook playbooks/windows_check.yml
+# ============================================================
+
+- name: "Windows Machines — SSH Check & Baseline"
+  hosts: windows_machines
+  gather_facts: no
+  roles:
+    - common
+    - windows_baseline

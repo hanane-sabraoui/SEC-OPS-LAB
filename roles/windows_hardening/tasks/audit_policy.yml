@@ -1,0 +1,101 @@
+---
+# ============================================================
+# Windows audit policy — CIS 17.x
+# ============================================================
+# WHY: Windows Advanced Audit Policy controls what security
+# events are logged to the Security Event Log. Without proper
+# auditing, breaches go undetected and forensics is impossible.
+# ============================================================
+
+- name: "[AUDIT] Configure advanced audit policies"
+  ansible.builtin.raw: |
+    # CIS 17.1.1: Audit Credential Validation
+    # WHY: Detects brute-force and pass-the-hash attacks
+    auditpol /set /subcategory:"Credential Validation" /success:enable /failure:enable
+
+    # CIS 17.2.1: Audit Application Group Management
+    auditpol /set /subcategory:"Application Group Management" /success:enable /failure:enable
+
+    # CIS 17.2.2: Audit Computer Account Management
+    auditpol /set /subcategory:"Computer Account Management" /success:enable /failure:enable
+
+    # CIS 17.2.3: Audit Security Group Management
+    # WHY: Group membership changes = privilege escalation vector
+    auditpol /set /subcategory:"Security Group Management" /success:enable /failure:enable
+
+    # CIS 17.2.5: Audit User Account Management
+    # WHY: Tracks account creation, deletion, password changes
+    auditpol /set /subcategory:"User Account Management" /success:enable /failure:enable
+
+    # CIS 17.3.1-2: Audit PNP Activity & Process Creation
+    auditpol /set /subcategory:"Plug and Play Events" /success:enable
+    auditpol /set /subcategory:"Process Creation" /success:enable
+
+    # CIS 17.5.1-6: Logon/Logoff events
+    # WHY: Tracks who logged in, from where, and when — core forensic data
+    auditpol /set /subcategory:"Account Lockout" /failure:enable
+    auditpol /set /subcategory:"Logoff" /success:enable
+    auditpol /set /subcategory:"Logon" /success:enable /failure:enable
+    auditpol /set /subcategory:"Other Logon/Logoff Events" /success:enable /failure:enable
+    auditpol /set /subcategory:"Special Logon" /success:enable
+
+    # CIS 17.6.1-4: Object Access
+    auditpol /set /subcategory:"Detailed File Share" /failure:enable
+    auditpol /set /subcategory:"File Share" /success:enable /failure:enable
+    auditpol /set /subcategory:"Other Object Access Events" /success:enable /failure:enable
+    auditpol /set /subcategory:"Removable Storage" /success:enable /failure:enable
+
+    # CIS 17.7.1-5: Policy Change
+    # WHY: Detects tampering with security policies themselves
+    auditpol /set /subcategory:"Audit Policy Change" /success:enable /failure:enable
+    auditpol /set /subcategory:"Authentication Policy Change" /success:enable
+    auditpol /set /subcategory:"Authorization Policy Change" /success:enable
+    auditpol /set /subcategory:"MPSSVC Rule-Level Policy Change" /success:enable /failure:enable
+
+    # CIS 17.8.1: Audit Sensitive Privilege Use
+    # WHY: Tracks use of powerful privileges (debug, take ownership, etc.)
+    auditpol /set /subcategory:"Sensitive Privilege Use" /success:enable /failure:enable
+
+    # CIS 17.9.1-5: System events
+    auditpol /set /subcategory:"IPsec Driver" /success:enable /failure:enable
+    auditpol /set /subcategory:"Other System Events" /success:enable /failure:enable
+    auditpol /set /subcategory:"Security State Change" /success:enable /failure:enable
+    auditpol /set /subcategory:"Security System Extension" /success:enable /failure:enable
+    auditpol /set /subcategory:"System Integrity" /success:enable /failure:enable
+
+    Write-Output "Advanced audit policies configured"
+  register: audit_result
+  changed_when: "'configured' in audit_result.stdout"
+
+- name: "[AUDIT] Enable command-line auditing in process creation events"
+  ansible.builtin.raw: |
+    # CIS 18.9.3.1: Include command line in process creation events
+    # WHY: Logs the exact command that started a process — essential for detecting
+    # malware execution, living-off-the-land attacks, and encoded PowerShell
+    $regPath = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System\Audit'
+    if (!(Test-Path $regPath)) { New-Item -Path $regPath -Force | Out-Null }
+    Set-ItemProperty -Path $regPath -Name 'ProcessCreationIncludeCmdLine_Enabled' -Value 1 -Type DWord
+    Write-Output "Command-line auditing enabled"
+  register: cmdline_audit
+  changed_when: "'enabled' in cmdline_audit.stdout"
+
+- name: "[AUDIT] Configure Event Log sizes"
+  ansible.builtin.raw: |
+    # CIS 18.9.27.x: Set minimum event log sizes
+    # WHY: Default 20MB fills in minutes on a busy server — increase to retain evidence
+    $logs = @{
+        'Application' = 32768     # 32MB
+        'Security'    = 196608    # 192MB — security logs are critical, keep them large
+        'System'      = 32768     # 32MB
+        'Setup'       = 32768     # 32MB
+    }
+
+    foreach ($log in $logs.GetEnumerator()) {
+        $regPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\EventLog\$($log.Key)"
+        if (!(Test-Path $regPath)) { New-Item -Path $regPath -Force | Out-Null }
+        Set-ItemProperty -Path $regPath -Name 'MaxSize' -Value $log.Value -Type DWord
+        Set-ItemProperty -Path $regPath -Name 'Retention' -Value 0 -Type DWord
+        Write-Output "$($log.Key) log: MaxSize=$($log.Value)KB"
+    }
+  register: evtlog_result
+  changed_when: true

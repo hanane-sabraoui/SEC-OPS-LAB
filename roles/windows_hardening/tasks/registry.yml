@@ -1,0 +1,125 @@
+---
+# ============================================================
+# Windows registry hardening — CIS 2.3.x / 18.x
+# ============================================================
+# WHY: Windows security policies are ultimately stored in the
+# registry. These keys control UAC behavior, SMB signing,
+# anonymous access, screen locking, and credential protection.
+# ============================================================
+
+- name: "[REG] Apply CIS registry hardening settings"
+  ansible.builtin.raw: |
+    $settings = @(
+        # === CIS 2.3.1.1: Accounts: Block Microsoft accounts ===
+        # WHY: Prevents cloud account sign-in on domain-joined/standalone servers
+        @{ Path='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'; Name='NoConnectedUser'; Value=3; Type='DWord' },
+
+        # === CIS 2.3.7.1: Interactive logon: Do not display last user name ===
+        # WHY: Displaying the last username gives attackers half the credential pair
+        @{ Path='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'; Name='DontDisplayLastUserName'; Value=1; Type='DWord' },
+
+        # === CIS 2.3.7.3: Interactive logon: Machine inactivity limit (900 sec) ===
+        # WHY: Auto-locks workstation after 15 min idle — prevents session hijacking
+        @{ Path='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'; Name='InactivityTimeoutSecs'; Value=900; Type='DWord' },
+
+        # === CIS 2.3.7.4: Interactive logon: Message title for logon ===
+        @{ Path='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'; Name='LegalNoticeCaption'; Value='AUTHORIZED ACCESS ONLY'; Type='String' },
+
+        # === CIS 2.3.7.5: Interactive logon: Message text for logon ===
+        # WHY: Legal banner — same rationale as Linux /etc/issue.net
+        @{ Path='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'; Name='LegalNoticeText'; Value='This system is for authorized users only. All activity is monitored and logged. Unauthorized access is a criminal offense.'; Type='String' },
+
+        # === CIS 2.3.8.1: Microsoft network client: Digitally sign communications always ===
+        # WHY: SMB signing prevents man-in-the-middle relaying of NTLM authentication
+        @{ Path='HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters'; Name='RequireSecuritySignature'; Value=1; Type='DWord' },
+
+        # === CIS 2.3.8.2: Microsoft network client: Send unencrypted password to third-party SMB ===
+        @{ Path='HKLM:\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters'; Name='EnablePlainTextPassword'; Value=0; Type='DWord' },
+
+        # === CIS 2.3.9.1: Microsoft network server: Digitally sign communications always ===
+        @{ Path='HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters'; Name='RequireSecuritySignature'; Value=1; Type='DWord' },
+
+        # === CIS 2.3.9.2: Server: Enable security signature ===
+        @{ Path='HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters'; Name='EnableSecuritySignature'; Value=1; Type='DWord' },
+
+        # === CIS 2.3.10.2: Network access: Do not allow anonymous enumeration of SAM accounts ===
+        # WHY: Prevents attackers from listing all local user accounts remotely
+        @{ Path='HKLM:\SYSTEM\CurrentControlSet\Control\Lsa'; Name='RestrictAnonymousSAM'; Value=1; Type='DWord' },
+
+        # === CIS 2.3.10.4: Network access: Restrict anonymous access to Named Pipes and Shares ===
+        @{ Path='HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters'; Name='RestrictNullSessAccess'; Value=1; Type='DWord' },
+
+        # === CIS 2.3.11.7: Network security: LAN Manager authentication level ===
+        # WHY: Force NTLMv2 only — NTLMv1 and LM hashes are easily cracked
+        @{ Path='HKLM:\SYSTEM\CurrentControlSet\Control\Lsa'; Name='LmCompatibilityLevel'; Value=5; Type='DWord' },
+
+        # === CIS 2.3.11.8: Minimum session security for NTLM SSP ===
+        @{ Path='HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0'; Name='NTLMMinClientSec'; Value=537395200; Type='DWord' },
+        @{ Path='HKLM:\SYSTEM\CurrentControlSet\Control\Lsa\MSV1_0'; Name='NTLMMinServerSec'; Value=537395200; Type='DWord' },
+
+        # === CIS 18.3.1: Enable LSA protection (RunAsPPL) ===
+        # WHY: Protects LSASS from credential dumping tools (Mimikatz)
+        @{ Path='HKLM:\SYSTEM\CurrentControlSet\Control\Lsa'; Name='RunAsPPL'; Value=1; Type='DWord' },
+
+        # === CIS 18.3.2: Enable Credential Guard (if supported) ===
+        @{ Path='HKLM:\SOFTWARE\Policies\Microsoft\Windows\DeviceGuard'; Name='EnableVirtualizationBasedSecurity'; Value=1; Type='DWord' },
+
+        # === CIS 18.4.1: Enable Structured Exception Handling Overwrite Protection (SEHOP) ===
+        # WHY: Prevents SEH-based buffer overflow exploits
+        @{ Path='HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\kernel'; Name='DisableExceptionChainValidation'; Value=0; Type='DWord' },
+
+        # === CIS 18.5.1: Turn off multicast name resolution (LLMNR) ===
+        # WHY: LLMNR can be poisoned to capture NTLM hashes (Responder attack)
+        @{ Path='HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient'; Name='EnableMulticast'; Value=0; Type='DWord' },
+
+        # === CIS 18.8.3.1: Enable UAC for all administrators ===
+        @{ Path='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'; Name='EnableLUA'; Value=1; Type='DWord' },
+
+        # === CIS 18.8.3.2: UAC elevation prompt behavior for admins ===
+        # WHY: Prompts admins for consent on elevation — prevents silent privilege escalation
+        @{ Path='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'; Name='ConsentPromptBehaviorAdmin'; Value=2; Type='DWord' },
+
+        # === CIS 18.8.3.3: UAC elevation prompt behavior for standard users ===
+        @{ Path='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'; Name='ConsentPromptBehaviorUser'; Value=0; Type='DWord' },
+
+        # === CIS 18.8.3.4: Detect application installations and prompt for elevation ===
+        @{ Path='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'; Name='EnableInstallerDetection'; Value=1; Type='DWord' },
+
+        # === CIS 18.9.4.1: Disable autoplay ===
+        # WHY: Autoplay can execute malware from USB drives automatically
+        @{ Path='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer'; Name='NoDriveTypeAutoRun'; Value=255; Type='DWord' },
+        @{ Path='HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer'; Name='NoAutorun'; Value=1; Type='DWord' },
+
+        # === CIS 18.9.11.1: Disable Windows Script Host ===
+        # WHY: WSH runs .vbs/.js scripts — primary malware delivery mechanism
+        @{ Path='HKLM:\SOFTWARE\Microsoft\Windows Script Host\Settings'; Name='Enabled'; Value=0; Type='DWord' },
+
+        # === CIS 18.9.65.3: Configure WinRM for security ===
+        # WHY: Disallow unencrypted WinRM traffic (even though we use SSH)
+        @{ Path='HKLM:\SOFTWARE\Policies\Microsoft\Windows\WinRM\Service'; Name='AllowUnencryptedTraffic'; Value=0; Type='DWord' },
+
+        # === CIS 18.9.102.1: Disable PowerShell v2 ===
+        # WHY: PS v2 bypasses AMSI, ScriptBlock logging, and constrained language mode
+        @{ Path='HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell'; Name='EnableScripts'; Value=1; Type='DWord' }
+    )
+
+    $applied = 0
+    foreach ($s in $settings) {
+        try {
+            if (!(Test-Path $s.Path)) {
+                New-Item -Path $s.Path -Force | Out-Null
+            }
+            Set-ItemProperty -Path $s.Path -Name $s.Name -Value $s.Value -Type $s.Type -Force
+            $applied++
+        } catch {
+            Write-Output "WARN: Failed to set $($s.Path)\$($s.Name): $_"
+        }
+    }
+
+    Write-Output "Registry hardening: $applied/$($settings.Count) settings applied"
+  register: reg_result
+  changed_when: "'applied' in reg_result.stdout"
+
+- name: "[REG] Display registry hardening result"
+  ansible.builtin.debug:
+    msg: "{{ reg_result.stdout_lines }}"

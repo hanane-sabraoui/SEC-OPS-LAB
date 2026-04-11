@@ -1,0 +1,13 @@
+---
+# ============================================================
+# playbooks/phone_check.yml — Phones-only connectivity & info
+# ============================================================
+# Run: ansible-playbook playbooks/phone_check.yml
+# ============================================================
+
+- name: "Phones (Termux) — SSH Check & Device Info"
+  hosts: phones
+  gather_facts: no
+  roles:
+    - common
+    - phone_check

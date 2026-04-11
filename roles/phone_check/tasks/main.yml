@@ -1,0 +1,61 @@
+---
+# ============================================================
+# Role: phone_check — Android / Termux connectivity & info
+# ============================================================
+# WHY: The phones group uses Termux which provides a Linux-like
+# environment on Android. We use raw/shell modules because
+# Termux may lack the full Python setup module dependencies.
+# gather_facts is disabled at the playbook level for phones.
+# ============================================================
+
+- name: "[PHONE] Verify SSH connectivity (raw)"
+  ansible.builtin.raw: echo "SSH to Termux OK"
+  register: phone_ssh
+  changed_when: false
+
+- name: "[PHONE] Display connectivity result"
+  ansible.builtin.debug:
+    msg: "{{ inventory_hostname }} ({{ ansible_host }}:{{ ansible_port }}) — {{ phone_ssh.stdout | trim }}"
+
+- name: "[PHONE] Get device info"
+  ansible.builtin.raw: |
+    echo "User    : $(whoami)"
+    echo "Hostname: $(hostname 2>/dev/null || echo N/A)"
+    echo "Kernel  : $(uname -r)"
+    echo "Arch    : $(uname -m)"
+    echo "Uptime  : $(uptime)"
+  register: device_info
+  changed_when: false
+
+- name: "[PHONE] Display device info"
+  ansible.builtin.debug:
+    msg: "{{ device_info.stdout_lines }}"
+
+- name: "[PHONE] Check disk space on /data"
+  ansible.builtin.shell: "df -h /data 2>/dev/null || df -h / | tail -1"
+  register: disk_info
+  changed_when: false
+  args:
+    executable: /data/data/com.termux/files/usr/bin/sh
+
+- name: "[PHONE] Display storage status"
+  ansible.builtin.debug:
+    msg: "Storage: {{ disk_info.stdout }}"
+
+- name: "[PHONE] List installed Termux packages"
+  ansible.builtin.raw: "dpkg -l 2>/dev/null | wc -l || echo 'dpkg not available'"
+  register: pkg_count
+  changed_when: false
+
+- name: "[PHONE] Display package count"
+  ansible.builtin.debug:
+    msg: "Installed Termux packages: {{ pkg_count.stdout | trim }}"
+
+- name: "[PHONE] Check Python availability"
+  ansible.builtin.raw: "python3 --version 2>&1 || echo 'Python3 not installed'"
+  register: py_ver
+  changed_when: false
+
+- name: "[PHONE] Display Python version"
+  ansible.builtin.debug:
+    msg: "{{ py_ver.stdout | trim }}"

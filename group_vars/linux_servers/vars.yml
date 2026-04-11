@@ -1,0 +1,19 @@
+---
+# ============================================================
+# group_vars/linux_servers/vars.yml - Ubuntu Server 22.04 specifics
+# ============================================================
+# WHY: Linux hardening tasks need privilege escalation (sudo).
+# We enable become here so every role applied to this group
+# can modify system configurations (sysctl, file perms, etc.).
+# ============================================================
+
+ansible_connection: ssh
+ansible_port: 22
+
+# Privilege escalation
+ansible_become: yes
+ansible_become_method: sudo
+ansible_become_password: "{{ vault_become_password }}"
+
+# Python interpreter - Ubuntu 22.04 ships python3
+ansible_python_interpreter: /usr/bin/python3

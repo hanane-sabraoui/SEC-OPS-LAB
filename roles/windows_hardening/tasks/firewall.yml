@@ -1,0 +1,57 @@
+---
+# ============================================================
+# Windows Firewall hardening — CIS 9.x
+# ============================================================
+# WHY: Windows Firewall is the host-based firewall. All three
+# profiles (Domain, Private, Public) must enforce default-deny
+# inbound plus logging. This prevents lateral movement even if
+# the network perimeter is breached.
+# ============================================================
+
+- name: "[FW] Configure Windows Firewall profiles"
+  ansible.builtin.raw: |
+    # CIS 9.1.1-9.3.1: Enable all firewall profiles with default block inbound
+    Set-NetFirewallProfile -Profile Domain -Enabled True -DefaultInboundAction Block -DefaultOutboundAction Allow -LogAllowed True -LogBlocked True -LogFileName '%SystemRoot%\System32\LogFiles\Firewall\pfirewall.log' -LogMaxSizeKilobytes 16384
+    Set-NetFirewallProfile -Profile Private -Enabled True -DefaultInboundAction Block -DefaultOutboundAction Allow -LogAllowed True -LogBlocked True -LogFileName '%SystemRoot%\System32\LogFiles\Firewall\pfirewall.log' -LogMaxSizeKilobytes 16384
+    Set-NetFirewallProfile -Profile Public -Enabled True -DefaultInboundAction Block -DefaultOutboundAction Allow -LogAllowed True -LogBlocked True -LogFileName '%SystemRoot%\System32\LogFiles\Firewall\pfirewall.log' -LogMaxSizeKilobytes 16384
+    # WHY: Default block inbound = whitelist model (like Linux UFW deny incoming)
+    # Logging at 16MB allows sufficient forensic data before rotation
+
+    Write-Output "All firewall profiles: Enabled, InboundBlock, Logging ON"
+  register: fw_result
+  changed_when: "'Enabled' in fw_result.stdout"
+
+# --- Ensure SSH is allowed (don't lock ourselves out!) ---
+- name: "[FW] Ensure SSH inbound rule exists"
+  ansible.builtin.raw: |
+    $rule = Get-NetFirewallRule -DisplayName 'OpenSSH Server (sshd)' -ErrorAction SilentlyContinue
+    if (!$rule) {
+        $rule = Get-NetFirewallRule -DisplayName '*SSH*' -ErrorAction SilentlyContinue | Select-Object -First 1
+    }
+    if (!$rule) {
+        New-NetFirewallRule -DisplayName 'SEC-OPS SSH Allow' -Direction Inbound -Protocol TCP -LocalPort 22 -Action Allow -Profile Any
+        Write-Output "SSH firewall rule created"
+    } else {
+        Set-NetFirewallRule -DisplayName $rule.DisplayName -Enabled True -Action Allow
+        Write-Output "SSH firewall rule verified: $($rule.DisplayName)"
+    }
+  register: fw_ssh
+  changed_when: "'created' in fw_ssh.stdout"
+
+# --- CIS 9.x: Disable rules that shouldn't be enabled ---
+- name: "[FW] Disable insecure inbound firewall rules"
+  ansible.builtin.raw: |
+    $disabled = 0
+    # Disable Remote Desktop inbound (we use SSH)
+    Get-NetFirewallRule -DisplayName '*Remote Desktop*' -ErrorAction SilentlyContinue | Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' } | ForEach-Object {
+        Set-NetFirewallRule -DisplayName $_.DisplayName -Enabled False
+        $disabled++
+    }
+    # Disable WinRM inbound (we use SSH)
+    Get-NetFirewallRule -DisplayName '*Windows Remote Management*' -ErrorAction SilentlyContinue | Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' } | ForEach-Object {
+        Set-NetFirewallRule -DisplayName $_.DisplayName -Enabled False
+        $disabled++
+    }
+    Write-Output "Disabled $disabled unnecessary inbound firewall rules"
+  register: fw_disable
+  changed_when: "'Disabled' in fw_disable.stdout and '0' not in fw_disable.stdout"

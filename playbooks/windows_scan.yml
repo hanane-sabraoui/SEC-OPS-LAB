@@ -1,0 +1,12 @@
+---
+# ============================================================
+# playbooks/windows_scan.yml — Windows-only HardeningKitty baseline
+# ============================================================
+# Run: ansible-playbook playbooks/windows_scan.yml
+# ============================================================
+
+- name: "Windows Machines — HardeningKitty CIS Baseline Scan"
+  hosts: windows_machines
+  gather_facts: no
+  roles:
+    - hardeningkitty_scan

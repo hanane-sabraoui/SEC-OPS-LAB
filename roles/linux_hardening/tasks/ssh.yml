@@ -1,0 +1,110 @@
+---
+# ============================================================
+# SSH daemon hardening — CIS 5.2.x / ANSSI R33-R37
+# ============================================================
+# WHY: SSH is the single entry point to all Linux servers.
+# A misconfigured sshd is the #1 cause of server compromise.
+# These settings enforce strong crypto, limit access, and
+# prevent brute-force escalation.
+# ============================================================
+
+- name: "[SSH] Harden sshd_config"
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "{{ item.regexp }}"
+    line: "{{ item.line }}"
+    state: present
+    backup: yes
+    validate: "/usr/sbin/sshd -t -f %s"
+  loop:
+    # --- CIS 5.2.1: Permissions on sshd_config ---
+    # (handled in permissions.yml)
+
+    # --- CIS 5.2.4: Disable root login ---
+    # WHY: Forces attackers to guess both username AND password
+    - { regexp: "^#?PermitRootLogin", line: "PermitRootLogin {{ harden_ssh_permit_root }}" }
+
+    # --- CIS 5.2.5: MaxAuthTries ---
+    # WHY: Limits brute-force attempts per connection
+    - { regexp: "^#?MaxAuthTries", line: "MaxAuthTries {{ harden_ssh_max_auth_tries }}" }
+
+    # --- CIS 5.2.6: IgnoreRhosts ---
+    # WHY: .rhosts files allow password-less login — legacy and dangerous
+    - { regexp: "^#?IgnoreRhosts", line: "IgnoreRhosts yes" }
+
+    # --- CIS 5.2.7: Disable HostbasedAuthentication ---
+    - { regexp: "^#?HostbasedAuthentication", line: "HostbasedAuthentication no" }
+
+    # --- CIS 5.2.8: PermitEmptyPasswords ---
+    # WHY: Never allow accounts with no password to SSH in
+    - { regexp: "^#?PermitEmptyPasswords", line: "PermitEmptyPasswords no" }
+
+    # --- CIS 5.2.9: PermitUserEnvironment ---
+    # WHY: Prevents users from setting env vars that could bypass security
+    - { regexp: "^#?PermitUserEnvironment", line: "PermitUserEnvironment no" }
+
+    # --- CIS 5.2.11: ClientAliveInterval & CountMax ---
+    # WHY: Terminates idle sessions — prevents abandoned terminals from being hijacked
+    - { regexp: "^#?ClientAliveInterval", line: "ClientAliveInterval {{ harden_ssh_client_alive_interval }}" }
+    - { regexp: "^#?ClientAliveCountMax", line: "ClientAliveCountMax {{ harden_ssh_client_alive_count_max }}" }
+
+    # --- CIS 5.2.12: LoginGraceTime ---
+    # WHY: Limits the window for completing authentication
+    - { regexp: "^#?LoginGraceTime", line: "LoginGraceTime {{ harden_ssh_login_grace_time }}" }
+
+    # --- CIS 5.2.13: AllowUsers (restrict who can SSH in) ---
+    - { regexp: "^#?AllowUsers", line: "AllowUsers {{ harden_ssh_allowed_users }}" }
+
+    # --- CIS 5.2.14: Banner ---
+    # WHY: Legal banner warns unauthorized users — required by many compliance frameworks
+    - { regexp: "^#?Banner", line: "Banner /etc/issue.net" }
+
+    # --- CIS 5.2.15: MaxStartups (anti brute-force) ---
+    # WHY: Limits concurrent unauthenticated connections
+    - { regexp: "^#?MaxStartups", line: "MaxStartups 10:30:60" }
+
+    # --- CIS 5.2.16: MaxSessions ---
+    - { regexp: "^#?MaxSessions", line: "MaxSessions 10" }
+
+    # --- ANSSI R33: Disable X11 forwarding ---
+    # WHY: X11 has no encryption and can be hijacked for keylogging
+    - { regexp: "^#?X11Forwarding", line: "X11Forwarding no" }
+
+    # --- ANSSI R34: Disable TCP forwarding ---
+    # WHY: Prevents SSH tunnel abuse to reach internal services
+    - { regexp: "^#?AllowTcpForwarding", line: "AllowTcpForwarding no" }
+
+    # --- ANSSI R35: Disable agent forwarding ---
+    # WHY: Agent forwarding exposes private keys to the remote host
+    - { regexp: "^#?AllowAgentForwarding", line: "AllowAgentForwarding no" }
+
+    # --- CIS 5.2.17: Strong ciphers only ---
+    - { regexp: "^#?Protocol", line: "Protocol 2" }
+
+    # --- Log level ---
+    # WHY: VERBOSE gives enough detail for forensics without overwhelming logs
+    - { regexp: "^#?LogLevel", line: "LogLevel VERBOSE" }
+
+    # --- ANSSI R37: Use PAM ---
+    - { regexp: "^#?UsePAM", line: "UsePAM yes" }
+
+    # --- Password auth (lab-specific — set to "no" in prod with keys) ---
+    - { regexp: "^#?PasswordAuthentication", line: "PasswordAuthentication {{ harden_ssh_password_auth }}" }
+
+  loop_control:
+    label: "{{ item.line }}"
+  notify: restart sshd
+
+# --- CIS 5.2.17+: Strong crypto ---
+- name: "[SSH] Configure strong ciphers, MACs, and KEX algorithms"
+  ansible.builtin.blockinfile:
+    path: /etc/ssh/sshd_config
+    block: |
+      # CIS/ANSSI: Strong cryptographic algorithms only
+      # WHY: Weak ciphers (3DES, RC4) and MACs (MD5) are breakable
+      Ciphers aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr
+      MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512,hmac-sha2-256
+      KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp521,ecdh-sha2-nistp384,ecdh-sha2-nistp256,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512
+    marker: "# {mark} ANSIBLE MANAGED — SSH CRYPTO"
+    state: present
+  notify: restart sshd

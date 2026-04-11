@@ -1,0 +1,12 @@
+---
+# ============================================================
+# playbooks/linux_harden.yml — Linux-only hardening
+# ============================================================
+# Run: ansible-playbook playbooks/linux_harden.yml
+# ============================================================
+
+- name: "Linux Servers — CIS/ANSSI Hardening"
+  hosts: linux_servers
+  gather_facts: yes
+  roles:
+    - linux_hardening

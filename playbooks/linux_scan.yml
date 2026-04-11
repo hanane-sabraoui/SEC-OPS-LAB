@@ -1,0 +1,12 @@
+---
+# ============================================================
+# playbooks/linux_scan.yml — Linux-only OpenSCAP baseline
+# ============================================================
+# Run: ansible-playbook playbooks/linux_scan.yml
+# ============================================================
+
+- name: "Linux Servers — OpenSCAP CIS + ANSSI Baseline Scan"
+  hosts: linux_servers
+  gather_facts: no
+  roles:
+    - openscap_scan

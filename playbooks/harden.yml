@@ -1,0 +1,19 @@
+---
+# ============================================================
+# playbooks/harden.yml — Master hardening playbook (Jalon 3)
+# ============================================================
+# Applies CIS/ANSSI hardening to both Linux and Windows hosts.
+# Run: ansible-playbook playbooks/harden.yml
+# ============================================================
+
+- name: "JALON 3 — Linux: CIS/ANSSI Hardening"
+  hosts: linux_servers
+  gather_facts: yes
+  roles:
+    - linux_hardening
+
+- name: "JALON 3 — Windows: CIS Hardening"
+  hosts: windows_machines
+  gather_facts: no
+  roles:
+    - windows_hardening

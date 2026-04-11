@@ -1,0 +1,75 @@
+---
+# ============================================================
+# Role: openscap_rescan — Post-hardening compliance rescan
+# ============================================================
+# Same scans as openscap_scan but saves reports with
+# "post_hardening" prefix for comparison against the baseline.
+# ============================================================
+
+- name: "[RESCAN] Create post-hardening reports directory"
+  ansible.builtin.file:
+    path: /tmp/openscap_reports
+    state: directory
+    mode: "0755"
+
+# --- CIS rescan ---
+- name: "[RESCAN] Run CIS Level 1 Server post-hardening scan"
+  ansible.builtin.command:
+    cmd: >
+      oscap xccdf eval
+      --profile xccdf_org.ssgproject.content_profile_cis_level1_server
+      --report /tmp/openscap_reports/cis_post_hardening_report.html
+      --results /tmp/openscap_reports/cis_post_hardening_results.xml
+      {{ ssg_datastream | default('/usr/share/xml/scap/ssg/content/ssg-ubuntu2204-ds.xml') }}
+  register: cis_rescan
+  failed_when: cis_rescan.rc == 1
+  changed_when: false
+
+- name: "[RESCAN] Display CIS post-hardening summary"
+  ansible.builtin.debug:
+    msg: "CIS post-hardening scan exit code: {{ cis_rescan.rc }} (0=all pass, 2=some fail)"
+
+# --- ANSSI rescan ---
+- name: "[RESCAN] Run ANSSI BP28 Enhanced post-hardening scan"
+  ansible.builtin.command:
+    cmd: >
+      oscap xccdf eval
+      --profile xccdf_org.ssgproject.content_profile_anssi_bp28_enhanced
+      --report /tmp/openscap_reports/anssi_post_hardening_report.html
+      --results /tmp/openscap_reports/anssi_post_hardening_results.xml
+      {{ ssg_datastream | default('/usr/share/xml/scap/ssg/content/ssg-ubuntu2204-ds.xml') }}
+  register: anssi_rescan
+  failed_when: anssi_rescan.rc == 1
+  changed_when: false
+
+# --- Fetch reports ---
+- name: "[RESCAN] Ensure local reports directory exists"
+  ansible.builtin.file:
+    path: "{{ playbook_dir }}/../reports/linux/"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  become: no
+
+- name: "[RESCAN] Fetch post-hardening HTML reports"
+  ansible.builtin.fetch:
+    src: "/tmp/openscap_reports/{{ item }}"
+    dest: "{{ playbook_dir }}/../reports/linux/{{ inventory_hostname }}_{{ item }}"
+    flat: yes
+  loop:
+    - cis_post_hardening_report.html
+    - anssi_post_hardening_report.html
+    - cis_post_hardening_results.xml
+    - anssi_post_hardening_results.xml
+
+- name: "[RESCAN] Post-hardening scan complete"
+  ansible.builtin.debug:
+    msg: |
+      ╔══════════════════════════════════════════════════════════════╗
+      ║    POST-HARDENING OPENSCAP RESCAN — COMPLETE                ║
+      ╠══════════════════════════════════════════════════════════════╣
+      ║ Host     : {{ inventory_hostname }}
+      ║ CIS      : exit {{ cis_rescan.rc }}
+      ║ ANSSI    : exit {{ anssi_rescan.rc }}
+      ║ Compare HTML reports in reports/linux/ (baseline vs post)
+      ╚══════════════════════════════════════════════════════════════╝

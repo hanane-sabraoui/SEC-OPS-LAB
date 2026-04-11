@@ -1,0 +1,46 @@
+---
+# ============================================================
+# Role: linux_hardening — CIS Level 1 + ANSSI BP28 hardening
+# ============================================================
+# Orchestrator: includes modular task files by domain.
+# Each file targets a specific CIS/ANSSI control family.
+# ============================================================
+
+- name: "[HARDEN-LINUX] Starting CIS/ANSSI hardening"
+  ansible.builtin.debug:
+    msg: "Beginning Linux hardening on {{ inventory_hostname }}"
+
+- name: Include filesystem hardening
+  ansible.builtin.include_tasks: filesystem.yml
+
+- name: Include kernel/sysctl hardening
+  ansible.builtin.include_tasks: sysctl.yml
+
+- name: Include SSH hardening
+  ansible.builtin.include_tasks: ssh.yml
+
+- name: Include authentication & password policy
+  ansible.builtin.include_tasks: auth.yml
+
+- name: Include service hardening
+  ansible.builtin.include_tasks: services.yml
+
+- name: Include network hardening
+  ansible.builtin.include_tasks: network.yml
+
+- name: Include logging & auditing
+  ansible.builtin.include_tasks: logging.yml
+
+- name: Include file permissions hardening
+  ansible.builtin.include_tasks: permissions.yml
+
+- name: Include banner & warning configuration
+  ansible.builtin.include_tasks: banners.yml
+
+- name: "[HARDEN-LINUX] Hardening complete"
+  ansible.builtin.debug:
+    msg: |
+      ╔══════════════════════════════════════════════════╗
+      ║   LINUX HARDENING COMPLETE — {{ inventory_hostname }}
+      ║   Re-run OpenSCAP scan to measure improvement.
+      ╚══════════════════════════════════════════════════╝

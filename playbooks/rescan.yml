@@ -1,0 +1,19 @@
+---
+# ============================================================
+# playbooks/rescan.yml — Post-hardening rescan (both OS)
+# ============================================================
+# Run AFTER hardening to compare scores against the baseline.
+# Run: ansible-playbook playbooks/rescan.yml
+# ============================================================
+
+- name: "POST-HARDENING — Linux: OpenSCAP Rescan"
+  hosts: linux_servers
+  gather_facts: no
+  roles:
+    - openscap_rescan
+
+- name: "POST-HARDENING — Windows: HardeningKitty Rescan"
+  hosts: windows_machines
+  gather_facts: no
+  roles:
+    - hardeningkitty_rescan

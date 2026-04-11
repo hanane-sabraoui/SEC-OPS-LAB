@@ -1,0 +1,96 @@
+---
+# ============================================================
+# Kernel / sysctl hardening — CIS 3.x / ANSSI R12-R13
+# ============================================================
+# WHY: Kernel parameters control how the OS handles network
+# traffic, memory randomisation, and process isolation.
+# Hardening these prevents IP spoofing, MITM attacks, and
+# common kernel-level exploits.
+# ============================================================
+
+- name: "[SYSCTL] Apply kernel hardening parameters"
+  ansible.builtin.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_set: yes
+    state: present
+    reload: yes
+    sysctl_file: /etc/sysctl.d/99-hardening.conf
+  loop:
+    # --- CIS 3.3.1: Source-routed packets (IPv4) ---
+    # WHY: Source routing lets an attacker dictate the packet path, bypassing firewalls
+    - { key: "net.ipv4.conf.all.accept_source_route", value: "0" }
+    - { key: "net.ipv4.conf.default.accept_source_route", value: "0" }
+
+    # --- CIS 3.3.2: ICMP redirects ---
+    # WHY: Accepting ICMP redirects can lead to MITM attacks by rerouting traffic
+    - { key: "net.ipv4.conf.all.accept_redirects", value: "0" }
+    - { key: "net.ipv4.conf.default.accept_redirects", value: "0" }
+    - { key: "net.ipv4.conf.all.send_redirects", value: "0" }
+    - { key: "net.ipv4.conf.default.send_redirects", value: "0" }
+
+    # --- CIS 3.3.3: Secure ICMP redirects ---
+    - { key: "net.ipv4.conf.all.secure_redirects", value: "0" }
+    - { key: "net.ipv4.conf.default.secure_redirects", value: "0" }
+
+    # --- CIS 3.3.4: Log suspicious packets (martians) ---
+    # WHY: Logs impossible source addresses — useful for detecting spoofing
+    - { key: "net.ipv4.conf.all.log_martians", value: "1" }
+    - { key: "net.ipv4.conf.default.log_martians", value: "1" }
+
+    # --- CIS 3.3.5: Ignore broadcast ICMP (Smurf attack prevention) ---
+    - { key: "net.ipv4.icmp_echo_ignore_broadcasts", value: "1" }
+
+    # --- CIS 3.3.6: Ignore bogus ICMP error responses ---
+    - { key: "net.ipv4.icmp_ignore_bogus_error_responses", value: "1" }
+
+    # --- CIS 3.3.7: Reverse path filtering ---
+    # WHY: Drops packets with source address that wouldn't be routed back — anti-spoofing
+    - { key: "net.ipv4.conf.all.rp_filter", value: "1" }
+    - { key: "net.ipv4.conf.default.rp_filter", value: "1" }
+
+    # --- CIS 3.3.8: TCP SYN cookies ---
+    # WHY: Protects against SYN flood DoS attacks
+    - { key: "net.ipv4.tcp_syncookies", value: "1" }
+
+    # --- CIS 3.3.9: IPv6 router advertisements ---
+    # WHY: Prevents rogue IPv6 router advertisements from poisoning routes
+    - { key: "net.ipv6.conf.all.accept_ra", value: "0" }
+    - { key: "net.ipv6.conf.default.accept_ra", value: "0" }
+    - { key: "net.ipv6.conf.all.accept_redirects", value: "0" }
+    - { key: "net.ipv6.conf.default.accept_redirects", value: "0" }
+    - { key: "net.ipv6.conf.all.accept_source_route", value: "0" }
+    - { key: "net.ipv6.conf.default.accept_source_route", value: "0" }
+
+    # --- CIS 3.3.10: IP forwarding (disable unless router) ---
+    - { key: "net.ipv4.ip_forward", value: "0" }
+
+    # --- ANSSI R12: ASLR (Address Space Layout Randomization) ---
+    # WHY: Randomizes memory layout — makes buffer overflow exploits unreliable
+    - { key: "kernel.randomize_va_space", value: "2" }
+
+    # --- ANSSI R13: Restrict dmesg access ---
+    # WHY: Kernel log can leak sensitive info (memory addresses, driver details)
+    - { key: "kernel.dmesg_restrict", value: "1" }
+
+    # --- ANSSI R13: Restrict kernel pointer exposure ---
+    # WHY: kptr_restrict hides kernel addresses from /proc — prevents info leak
+    - { key: "kernel.kptr_restrict", value: "2" }
+
+    # --- ANSSI: Restrict ptrace scope ---
+    # WHY: Prevents processes from attaching debuggers to other processes
+    - { key: "kernel.yama.ptrace_scope", value: "2" }
+
+    # --- ANSSI: Restrict unprivileged BPF ---
+    # WHY: BPF can be used for privilege escalation
+    - { key: "kernel.unprivileged_bpf_disabled", value: "1" }
+
+    # --- ANSSI: Restrict user namespaces ---
+    # WHY: Unprivileged user namespaces are a common exploit vector
+    - { key: "kernel.unprivileged_userns_clone", value: "0" }
+
+    # --- ANSSI: Restrict perf_event ---
+    # WHY: perf can be used to leak kernel information
+    - { key: "kernel.perf_event_paranoid", value: "3" }
+  loop_control:
+    label: "{{ item.key }} = {{ item.value }}"

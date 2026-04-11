@@ -1,0 +1,78 @@
+---
+# ============================================================
+# Windows network hardening — CIS 18.5.x / 18.6.x
+# ============================================================
+# WHY: Windows network protocols (NetBIOS, LLMNR, WPAD) have
+# well-known vulnerabilities that tools like Responder exploit
+# to capture credentials on the local network.
+# ============================================================
+
+- name: "[NET] Disable NetBIOS over TCP/IP on all adapters"
+  ansible.builtin.raw: |
+    # WHY: NetBIOS name resolution can be poisoned (like LLMNR).
+    # Disabling it forces DNS-only resolution.
+    $adapters = Get-WmiObject Win32_NetworkAdapterConfiguration -Filter 'IPEnabled=True'
+    $count = 0
+    foreach ($adapter in $adapters) {
+        # SetTcpipNetbios(2) = Disable NetBIOS
+        $adapter.SetTcpipNetbios(2) | Out-Null
+        $count++
+    }
+    Write-Output "NetBIOS disabled on $count adapter(s)"
+  register: netbios_result
+  changed_when: "'disabled' in netbios_result.stdout"
+
+- name: "[NET] Disable WPAD (Web Proxy Auto-Discovery)"
+  ansible.builtin.raw: |
+    # WHY: WPAD can be poisoned to redirect all HTTP traffic through an attacker's proxy
+    $regPath = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings\WinHttp'
+    if (!(Test-Path $regPath)) { New-Item -Path $regPath -Force | Out-Null }
+    Set-ItemProperty -Path $regPath -Name 'DisableWpad' -Value 1 -Type DWord
+
+    # Also disable via service
+    $svc = Get-Service -Name 'WinHttpAutoProxySvc' -ErrorAction SilentlyContinue
+    if ($svc) {
+        Stop-Service -Name 'WinHttpAutoProxySvc' -Force -ErrorAction SilentlyContinue
+        Set-Service -Name 'WinHttpAutoProxySvc' -StartupType Disabled -ErrorAction SilentlyContinue
+    }
+    Write-Output "WPAD disabled (registry + service)"
+  register: wpad_result
+  changed_when: "'disabled' in wpad_result.stdout"
+
+- name: "[NET] Disable SMBv1 protocol"
+  ansible.builtin.raw: |
+    # WHY: SMBv1 is vulnerable to EternalBlue (WannaCry/NotPetya).
+    # There is no legitimate reason to run SMBv1 in 2024+
+    Set-SmbServerConfiguration -EnableSMB1Protocol $false -Force -ErrorAction SilentlyContinue
+
+    # Also disable via registry for completeness
+    $regPath = 'HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters'
+    Set-ItemProperty -Path $regPath -Name 'SMB1' -Value 0 -Type DWord -Force
+
+    # Disable SMBv1 client
+    $clientPath = 'HKLM:\SYSTEM\CurrentControlSet\Services\mrxsmb10'
+    if (Test-Path $clientPath) {
+        Set-ItemProperty -Path $clientPath -Name 'Start' -Value 4 -Type DWord -Force
+    }
+
+    Write-Output "SMBv1 disabled (server + client)"
+  register: smb1_result
+  changed_when: "'disabled' in smb1_result.stdout"
+
+- name: "[NET] Enable SMB encryption"
+  ansible.builtin.raw: |
+    # WHY: SMB encryption prevents network sniffing of file transfers
+    Set-SmbServerConfiguration -EncryptData $true -Force -ErrorAction SilentlyContinue
+    Write-Output "SMB encryption enabled"
+  register: smb_enc
+  changed_when: "'enabled' in smb_enc.stdout"
+
+- name: "[NET] Configure DNS client to prevent DNS devolution"
+  ansible.builtin.raw: |
+    # WHY: DNS devolution can be abused to redirect queries to malicious domains
+    $regPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient'
+    if (!(Test-Path $regPath)) { New-Item -Path $regPath -Force | Out-Null }
+    Set-ItemProperty -Path $regPath -Name 'UseDomainNameDevolution' -Value 0 -Type DWord
+    Write-Output "DNS devolution disabled"
+  register: dns_result
+  changed_when: "'disabled' in dns_result.stdout"

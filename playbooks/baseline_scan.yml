@@ -1,0 +1,27 @@
+---
+# ============================================================
+# playbooks/baseline_scan.yml — Master baseline scan (Jalon 2)
+# ============================================================
+# Runs OpenSCAP on Linux + HardeningKitty on Windows.
+# HTML reports are fetched to reports/ on the control node.
+#
+# Run: ansible-playbook playbooks/baseline_scan.yml
+# ============================================================
+
+#
+# Phase 1: Linux — OpenSCAP CIS + ANSSI scans
+#
+- name: "JALON 2 — Linux: OpenSCAP Baseline Compliance Scan"
+  hosts: linux_servers
+  gather_facts: no
+  roles:
+    - openscap_scan
+
+#
+# Phase 2: Windows — HardeningKitty CIS audit
+#
+- name: "JALON 2 — Windows: HardeningKitty Baseline Compliance Scan"
+  hosts: windows_machines
+  gather_facts: no
+  roles:
+    - hardeningkitty_scan

@@ -1,0 +1,276 @@
+---
+# ============================================================
+# Role: hardeningkitty_scan — Install HardeningKitty & run
+#       CIS baseline audit on Windows via SSH (PowerShell)
+# ============================================================
+# WHY: HardeningKitty is an open-source PowerShell module that
+# audits Windows systems against CIS benchmarks. It checks
+# registry keys, security policies, firewall rules, services,
+# and more. Running it in "Audit" mode (non-destructive) gives
+# us a baseline compliance score before hardening (Jalon 2).
+#
+# Since we connect via SSH (not WinRM), all commands are raw
+# PowerShell. We download HardeningKitty from GitHub, import
+# the module, run the audit, and export CSV + HTML results.
+# ============================================================
+
+# --- Step 1: Create working directory ---
+- name: "[HKITTY] Create HardeningKitty working directory"
+  ansible.builtin.raw: |
+    if (!(Test-Path 'C:\SEC-OPS')) { New-Item -ItemType Directory -Path 'C:\SEC-OPS' -Force | Out-Null }
+    if (!(Test-Path 'C:\SEC-OPS\reports')) { New-Item -ItemType Directory -Path 'C:\SEC-OPS\reports' -Force | Out-Null }
+    Write-Output "Directories ready"
+  changed_when: false
+
+# --- Step 2: Download HardeningKitty ---
+- name: "[HKITTY] Download HardeningKitty from GitHub"
+  ansible.builtin.raw: |
+    $hkPath = 'C:\SEC-OPS\HardeningKitty'
+    if (Test-Path "$hkPath\HardeningKitty.psm1") {
+        Write-Output "HardeningKitty already present"
+    } else {
+        Write-Output "Downloading HardeningKitty..."
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $zipUrl = 'https://github.com/scipag/HardeningKitty/archive/refs/heads/master.zip'
+        $zipPath = 'C:\SEC-OPS\hk.zip'
+        Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
+        Expand-Archive -Path $zipPath -DestinationPath 'C:\SEC-OPS\hk_tmp' -Force
+        # The extracted folder has a suffix, find it
+        $extracted = Get-ChildItem 'C:\SEC-OPS\hk_tmp' -Directory | Select-Object -First 1
+        if ($extracted) {
+            Move-Item -Path $extracted.FullName -Destination $hkPath -Force
+            Write-Output "HardeningKitty installed to $hkPath"
+        } else {
+            Write-Output "ERROR: Extraction failed"
+        }
+        Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
+        Remove-Item 'C:\SEC-OPS\hk_tmp' -Recurse -Force -ErrorAction SilentlyContinue
+    }
+  register: hk_download
+  changed_when: "'Downloading' in hk_download.stdout"
+
+- name: "[HKITTY] Display download result"
+  ansible.builtin.debug:
+    msg: "{{ hk_download.stdout_lines }}"
+
+# --- Step 3: Verify HardeningKitty module loads ---
+- name: "[HKITTY] Verify HardeningKitty module is loadable"
+  ansible.builtin.raw: |
+    Import-Module 'C:\SEC-OPS\HardeningKitty\HardeningKitty.psm1' -Force -ErrorAction Stop
+    Write-Output "Module loaded — version: $((Get-Module HardeningKitty).Version)"
+  register: hk_verify
+  changed_when: false
+
+- name: "[HKITTY] Display module info"
+  ansible.builtin.debug:
+    msg: "{{ hk_verify.stdout | trim }}"
+
+# --- Step 4: List available finding lists (benchmarks) ---
+- name: "[HKITTY] List available CIS finding lists"
+  ansible.builtin.raw: |
+    $hkPath = 'C:\SEC-OPS\HardeningKitty'
+    Get-ChildItem "$hkPath\lists\finding_list_cis*" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
+    Get-ChildItem "$hkPath\lists\finding_list_msft*" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
+  register: hk_lists
+  changed_when: false
+
+- name: "[HKITTY] Display available benchmarks"
+  ansible.builtin.debug:
+    msg: "{{ hk_lists.stdout_lines }}"
+
+# --- Step 5: Run CIS audit (Audit mode = non-destructive) ---
+- name: "[HKITTY] Run CIS baseline audit (Audit mode)"
+  ansible.builtin.raw: |
+    Import-Module 'C:\SEC-OPS\HardeningKitty\HardeningKitty.psm1' -Force
+
+    $hkPath = 'C:\SEC-OPS\HardeningKitty'
+    $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
+    $reportCsv = "C:\SEC-OPS\reports\cis_baseline_$timestamp.csv"
+    $logFile   = "C:\SEC-OPS\reports\cis_baseline_$timestamp.log"
+
+    # Find the best matching CIS list for this OS
+    $osBuild = [System.Environment]::OSVersion.Version.Build
+    $osCaption = (Get-CimInstance Win32_OperatingSystem).Caption
+
+    if ($osCaption -match 'Server 2019') {
+        $listPattern = 'finding_list_cis_microsoft_windows_server_2019*'
+    } elseif ($osCaption -match 'Server 2022') {
+        $listPattern = 'finding_list_cis_microsoft_windows_server_2022*'
+    } elseif ($osCaption -match 'Windows 10') {
+        $listPattern = 'finding_list_cis_microsoft_windows_10*'
+    } elseif ($osCaption -match 'Windows 11') {
+        $listPattern = 'finding_list_cis_microsoft_windows_11*'
+    } else {
+        $listPattern = 'finding_list_cis*'
+    }
+
+    $findingList = Get-ChildItem "$hkPath\lists\$listPattern" -ErrorAction SilentlyContinue | Select-Object -First 1
+
+    if (!$findingList) {
+        # Fallback: use any CIS list
+        $findingList = Get-ChildItem "$hkPath\lists\finding_list_cis*" -ErrorAction SilentlyContinue | Select-Object -First 1
+    }
+
+    if (!$findingList) {
+        Write-Output "ERROR: No CIS finding list found"
+        exit 1
+    }
+
+    Write-Output "OS Detected : $osCaption"
+    Write-Output "Finding List: $($findingList.Name)"
+    Write-Output "Running audit... (this may take several minutes)"
+
+    Invoke-HardeningKitty -Mode Audit -Log -LogFile $logFile -Report -ReportFile $reportCsv -FileFindingList $findingList.FullName -SkipRestorePoint
+
+    Write-Output "Audit complete"
+    Write-Output "CSV Report : $reportCsv"
+    Write-Output "Log File   : $logFile"
+  register: hk_audit
+  changed_when: false
+  # Audit can take a while on slow VMs
+  async: 600
+  poll: 15
+
+- name: "[HKITTY] Display audit output (last 30 lines)"
+  ansible.builtin.debug:
+    msg: "{{ hk_audit.stdout_lines[-30:] | default(hk_audit.stdout_lines) }}"
+
+# --- Step 6: Generate HTML report from CSV ---
+- name: "[HKITTY] Generate HTML report from CSV"
+  ansible.builtin.raw: |
+    $latestCsv = Get-ChildItem 'C:\SEC-OPS\reports\cis_baseline_*.csv' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+
+    if (!$latestCsv) {
+        Write-Output "ERROR: No CSV report found"
+        exit 1
+    }
+
+    $data = Import-Csv $latestCsv.FullName
+    $total = $data.Count
+    $passed = ($data | Where-Object { $_.TestResult -eq 'Passed' }).Count
+    $failed = ($data | Where-Object { $_.TestResult -eq 'Failed' }).Count
+    $warning = ($data | Where-Object { $_.TestResult -match 'Warning' }).Count
+    $scorePercent = if ($total -gt 0) { [math]::Round(($passed / $total) * 100, 1) } else { 0 }
+
+    Write-Output "========================================"
+    Write-Output "  HardeningKitty CIS Baseline Results"
+    Write-Output "========================================"
+    Write-Output "Total rules  : $total"
+    Write-Output "Passed       : $passed"
+    Write-Output "Failed       : $failed"
+    Write-Output "Warning      : $warning"
+    Write-Output "SCORE        : $scorePercent %"
+    Write-Output "========================================"
+
+    # Build HTML
+    $htmlPath = $latestCsv.FullName -replace '\.csv$', '.html'
+    $htmlContent = @"
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>HardeningKitty CIS Baseline — $env:COMPUTERNAME</title>
+      <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        h1 { color: #1a237e; }
+        .summary { background: #fff; padding: 20px; border-radius: 8px; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .score { font-size: 48px; font-weight: bold; color: $(if ($scorePercent -ge 85) { '#2e7d32' } elseif ($scorePercent -ge 50) { '#f57f17' } else { '#c62828' }); }
+        table { border-collapse: collapse; width: 100%; background: #fff; margin-top: 20px; }
+        th { background: #1a237e; color: white; padding: 12px 8px; text-align: left; }
+        td { padding: 8px; border-bottom: 1px solid #ddd; }
+        tr:nth-child(even) { background: #f9f9f9; }
+        .passed { color: #2e7d32; font-weight: bold; }
+        .failed { color: #c62828; font-weight: bold; }
+        .warning { color: #f57f17; font-weight: bold; }
+      </style>
+    </head>
+    <body>
+      <h1>HardeningKitty CIS Baseline Report</h1>
+      <p>Host: <strong>$env:COMPUTERNAME</strong> | Date: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') | OS: $((Get-CimInstance Win32_OperatingSystem).Caption)</p>
+      <div class="summary">
+        <div class="score">$scorePercent%</div>
+        <p>Compliance Score — Passed: $passed | Failed: $failed | Warning: $warning | Total: $total</p>
+      </div>
+      <table>
+        <tr><th>#</th><th>ID</th><th>Name</th><th>Expected</th><th>Current</th><th>Result</th><th>Severity</th></tr>
+    "@
+
+    $i = 0
+    foreach ($row in $data) {
+        $i++
+        $resultClass = switch -Regex ($row.TestResult) {
+            'Passed'  { 'passed' }
+            'Failed'  { 'failed' }
+            default   { 'warning' }
+        }
+        $htmlContent += "<tr><td>$i</td><td>$($row.ID)</td><td>$($row.Name)</td><td>$($row.Recommended)</td><td>$($row.CurrentValue)</td><td class='$resultClass'>$($row.TestResult)</td><td>$($row.Severity)</td></tr>`n"
+    }
+
+    $htmlContent += "</table></body></html>"
+    $htmlContent | Out-File -FilePath $htmlPath -Encoding UTF8 -Force
+
+    Write-Output "HTML report : $htmlPath"
+  register: hk_html
+  changed_when: false
+
+- name: "[HKITTY] Display score summary"
+  ansible.builtin.debug:
+    msg: "{{ hk_html.stdout_lines }}"
+
+# --- Step 7: Fetch reports to control node ---
+- name: "[HKITTY] Ensure local reports directory exists"
+  ansible.builtin.file:
+    path: "{{ playbook_dir }}/../reports/windows/"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  become: no
+
+- name: "[HKITTY] Find latest CSV report on target"
+  ansible.builtin.raw: |
+    (Get-ChildItem 'C:\SEC-OPS\reports\cis_baseline_*.csv' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+  register: latest_csv_path
+  changed_when: false
+
+- name: "[HKITTY] Find latest HTML report on target"
+  ansible.builtin.raw: |
+    (Get-ChildItem 'C:\SEC-OPS\reports\cis_baseline_*.html' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
+  register: latest_html_path
+  changed_when: false
+
+- name: "[HKITTY] Fetch CSV report to control node"
+  ansible.builtin.fetch:
+    src: "{{ latest_csv_path.stdout | trim }}"
+    dest: "{{ playbook_dir }}/../reports/windows/{{ inventory_hostname }}_cis_baseline.csv"
+    flat: yes
+  when: latest_csv_path.stdout | trim | length > 0
+
+- name: "[HKITTY] Fetch HTML report to control node"
+  ansible.builtin.fetch:
+    src: "{{ latest_html_path.stdout | trim }}"
+    dest: "{{ playbook_dir }}/../reports/windows/{{ inventory_hostname }}_cis_baseline.html"
+    flat: yes
+  when: latest_html_path.stdout | trim | length > 0
+
+- name: "[HKITTY] Baseline scan complete — summary"
+  ansible.builtin.debug:
+    msg: |
+      ╔══════════════════════════════════════════════════════════╗
+      ║       HARDENINGKITTY BASELINE SCAN — COMPLETE           ║
+      ╠══════════════════════════════════════════════════════════╣
+      ║ Host     : {{ inventory_hostname }}
+      ║ Benchmark: CIS (auto-detected for OS)
+      ║ Reports fetched to: reports/windows/
+      ║                                                         
+      ║ Open the HTML file in a browser to see full details.   
+      ╚══════════════════════════════════════════════════════════╝
+
+
+
+
+
+
+
+
+
+
+

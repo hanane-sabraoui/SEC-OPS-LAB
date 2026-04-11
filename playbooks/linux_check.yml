@@ -1,0 +1,13 @@
+---
+# ============================================================
+# playbooks/linux_check.yml — Linux-only connectivity & info
+# ============================================================
+# Run: ansible-playbook playbooks/linux_check.yml
+# ============================================================
+
+- name: "Linux Servers — SSH Check & Baseline"
+  hosts: linux_servers
+  gather_facts: no
+  roles:
+    - common
+    - linux_baseline

@@ -1,0 +1,12 @@
+---
+# ============================================================
+# playbooks/windows_harden.yml — Windows-only hardening
+# ============================================================
+# Run: ansible-playbook playbooks/windows_harden.yml
+# ============================================================
+
+- name: "Windows Machines — CIS Hardening"
+  hosts: windows_machines
+  gather_facts: no
+  roles:
+    - windows_hardening

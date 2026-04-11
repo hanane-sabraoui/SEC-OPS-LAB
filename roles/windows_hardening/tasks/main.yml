@@ -1,0 +1,42 @@
+---
+# ============================================================
+# Role: windows_hardening — CIS Level 1 hardening via SSH
+# ============================================================
+# Orchestrator: includes modular task files by domain.
+# All commands use ansible.builtin.raw (PowerShell over SSH)
+# since WinRM is not available in this lab.
+# ============================================================
+
+- name: "[HARDEN-WIN] Starting CIS hardening"
+  ansible.builtin.debug:
+    msg: "Beginning Windows CIS hardening on {{ inventory_hostname }}"
+
+- name: Include account policy hardening
+  ansible.builtin.include_tasks: account_policy.yml
+
+- name: Include audit policy hardening
+  ansible.builtin.include_tasks: audit_policy.yml
+
+- name: Include registry hardening
+  ansible.builtin.include_tasks: registry.yml
+
+- name: Include service hardening
+  ansible.builtin.include_tasks: services.yml
+
+- name: Include firewall hardening
+  ansible.builtin.include_tasks: firewall.yml
+
+- name: Include network hardening
+  ansible.builtin.include_tasks: network.yml
+
+- name: Include user rights hardening
+  ansible.builtin.include_tasks: user_rights.yml
+
+- name: "[HARDEN-WIN] Hardening complete"
+  ansible.builtin.debug:
+    msg: |
+      ╔══════════════════════════════════════════════════╗
+      ║   WINDOWS HARDENING COMPLETE — {{ inventory_hostname }}
+      ║   Re-run HardeningKitty scan to measure improvement.
+      ║   A REBOOT is recommended for all changes to take effect.
+      ╚══════════════════════════════════════════════════╝

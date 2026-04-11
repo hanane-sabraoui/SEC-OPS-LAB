@@ -1,0 +1,106 @@
+---
+# ============================================================
+# Windows account policy — CIS 1.1.x / 1.2.x
+# ============================================================
+# WHY: Account policies control password complexity, lockout
+# thresholds, and Kerberos settings. They are the first line
+# of defence against brute-force and credential-stuffing attacks.
+# We use secedit to export/import security templates.
+# ============================================================
+
+- name: "[ACCT] Configure password and lockout policies via secedit"
+  ansible.builtin.raw: |
+    # Create security template INF file
+    $infContent = @"
+    [Unicode]
+    Unicode=yes
+    [System Access]
+    ; CIS 1.1.1: Enforce password history (24 passwords remembered)
+    ; WHY: Prevents users from cycling back to old compromised passwords
+    PasswordHistorySize = 24
+
+    ; CIS 1.1.2: Maximum password age (365 days)
+    MaximumPasswordAge = 365
+
+    ; CIS 1.1.3: Minimum password age (1 day)
+    ; WHY: Prevents immediate password change to bypass history requirement
+    MinimumPasswordAge = 1
+
+    ; CIS 1.1.4: Minimum password length (14 chars)
+    ; WHY: Longer passwords exponentially increase brute-force time
+    MinimumPasswordLength = 14
+
+    ; CIS 1.1.5: Password must meet complexity requirements
+    ; WHY: Forces mix of upper/lower/digit/special — resists dictionary attacks
+    PasswordComplexity = 1
+
+    ; CIS 1.1.6: Store passwords using reversible encryption — DISABLED
+    ; WHY: Reversible encryption is effectively plain-text storage
+    ClearTextPassword = 0
+
+    ; CIS 1.2.1: Account lockout duration (30 minutes)
+    LockoutDuration = 30
+
+    ; CIS 1.2.2: Account lockout threshold (5 invalid attempts)
+    ; WHY: Stops brute-force attacks after 5 guesses
+    LockoutBadCount = 5
+
+    ; CIS 1.2.3: Reset account lockout counter after 30 minutes
+    ResetLockoutCount = 30
+
+    [Version]
+    signature="`$CHICAGO`$"
+    Revision=1
+    "@
+
+    $infPath = 'C:\SEC-OPS\account_policy.inf'
+    $sdbPath = 'C:\SEC-OPS\account_policy.sdb'
+
+    $infContent | Out-File -FilePath $infPath -Encoding Unicode -Force
+
+    # Import the security template
+    secedit /configure /db $sdbPath /cfg $infPath /overwrite /quiet
+    $exitCode = $LASTEXITCODE
+
+    # Clean up
+    Remove-Item $sdbPath -Force -ErrorAction SilentlyContinue
+
+    if ($exitCode -eq 0) {
+        Write-Output "Account policy applied successfully"
+    } else {
+        Write-Output "WARNING: secedit returned exit code $exitCode"
+    }
+  register: acct_result
+  changed_when: "'applied successfully' in acct_result.stdout"
+
+- name: "[ACCT] Display account policy result"
+  ansible.builtin.debug:
+    msg: "{{ acct_result.stdout | trim }}"
+
+# --- CIS 1.1.7: Rename or disable Guest account ---
+- name: "[ACCT] Disable Guest account"
+  ansible.builtin.raw: |
+    $guest = Get-LocalUser -Name 'Guest' -ErrorAction SilentlyContinue
+    if ($guest -and $guest.Enabled) {
+        Disable-LocalUser -Name 'Guest'
+        Write-Output "Guest account disabled"
+    } else {
+        Write-Output "Guest account already disabled or not found"
+    }
+  register: guest_result
+  changed_when: "'disabled' in guest_result.stdout and 'already' not in guest_result.stdout"
+
+# --- CIS 1.1.8: Rename Administrator account ---
+- name: "[ACCT] Rename default Administrator account"
+  ansible.builtin.raw: |
+    $admin = Get-LocalUser -Name 'Administrator' -ErrorAction SilentlyContinue
+    if ($admin) {
+        Rename-LocalUser -Name 'Administrator' -NewName 'SecAdmin'
+        Write-Output "Administrator renamed to SecAdmin"
+    } else {
+        Write-Output "Administrator account already renamed or not found"
+    }
+  register: rename_result
+  changed_when: "'renamed to' in rename_result.stdout"
+  ignore_errors: yes
+  # WHY: Default usernames are the first targets for brute-force tools

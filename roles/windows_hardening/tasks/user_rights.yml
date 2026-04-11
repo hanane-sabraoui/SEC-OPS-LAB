@@ -1,0 +1,95 @@
+---
+# ============================================================
+# Windows user rights / security options — CIS 2.2.x
+# ============================================================
+# WHY: User rights assignments determine who can perform
+# privileged operations. Over-permissive rights let attackers
+# escalate privileges after gaining initial access.
+# ============================================================
+
+- name: "[RIGHTS] Apply user rights security template"
+  ansible.builtin.raw: |
+    $infContent = @"
+    [Unicode]
+    Unicode=yes
+    [Privilege Rights]
+    ; CIS 2.2.2: Access this computer from the network
+    ; WHY: Restrict to Administrators and authenticated users only
+    SeNetworkLogonRight = *S-1-5-32-544,*S-1-5-11
+
+    ; CIS 2.2.6: Allow log on locally
+    SeInteractiveLogonRight = *S-1-5-32-544
+
+    ; CIS 2.2.21: Deny access to this computer from the network — Guest
+    ; WHY: Guests should never have network access to a server
+    SeDenyNetworkLogonRight = *S-1-5-32-546
+
+    ; CIS 2.2.26: Deny log on through Remote Desktop — Guest
+    SeDenyRemoteInteractiveLogonRight = *S-1-5-32-546
+
+    ; CIS 2.2.33: Perform volume maintenance tasks — Administrators only
+    ; WHY: Volume management can bypass file permissions
+    SeManageVolumePrivilege = *S-1-5-32-544
+
+    ; CIS 2.2.36: Take ownership of files — Administrators only
+    SeTakeOwnershipPrivilege = *S-1-5-32-544
+
+    ; CIS 2.2.12: Force shutdown from a remote system — Administrators only
+    SeRemoteShutdownPrivilege = *S-1-5-32-544
+
+    [Version]
+    signature="`$CHICAGO`$"
+    Revision=1
+    "@
+
+    $infPath = 'C:\SEC-OPS\user_rights.inf'
+    $sdbPath = 'C:\SEC-OPS\user_rights.sdb'
+
+    $infContent | Out-File -FilePath $infPath -Encoding Unicode -Force
+    secedit /configure /db $sdbPath /cfg $infPath /overwrite /quiet
+    $exitCode = $LASTEXITCODE
+
+    Remove-Item $sdbPath -Force -ErrorAction SilentlyContinue
+
+    if ($exitCode -eq 0) {
+        Write-Output "User rights policy applied successfully"
+    } else {
+        Write-Output "WARNING: secedit returned exit code $exitCode (some settings may require domain policy)"
+    }
+  register: rights_result
+  changed_when: "'applied successfully' in rights_result.stdout"
+
+- name: "[RIGHTS] Display user rights result"
+  ansible.builtin.debug:
+    msg: "{{ rights_result.stdout | trim }}"
+
+# --- CIS 18.9.102: Disable PowerShell v2 engine ---
+- name: "[RIGHTS] Disable PowerShell v2 engine"
+  ansible.builtin.raw: |
+    # WHY: PS v2 engine can bypass modern security controls:
+    # - No AMSI (Anti-Malware Scan Interface)
+    # - No Script Block Logging
+    # - No Constrained Language Mode
+    # Attackers downgrade to v2 to evade detection.
+    $feature = Get-WindowsOptionalFeature -Online -FeatureName 'MicrosoftWindowsPowerShellV2Root' -ErrorAction SilentlyContinue
+    if ($feature -and $feature.State -eq 'Enabled') {
+        Disable-WindowsOptionalFeature -Online -FeatureName 'MicrosoftWindowsPowerShellV2Root' -NoRestart
+        Write-Output "PowerShell v2 engine disabled"
+    } else {
+        Write-Output "PowerShell v2 engine already disabled or not found"
+    }
+  register: psv2_result
+  changed_when: "'disabled' in psv2_result.stdout and 'already' not in psv2_result.stdout"
+  ignore_errors: yes
+
+# --- Enable PowerShell ScriptBlock Logging ---
+- name: "[RIGHTS] Enable PowerShell ScriptBlock Logging"
+  ansible.builtin.raw: |
+    # WHY: Logs the full content of every PowerShell script block executed.
+    # Essential for detecting encoded/obfuscated malicious commands.
+    $regPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging'
+    if (!(Test-Path $regPath)) { New-Item -Path $regPath -Force | Out-Null }
+    Set-ItemProperty -Path $regPath -Name 'EnableScriptBlockLogging' -Value 1 -Type DWord
+    Write-Output "PowerShell ScriptBlock logging enabled"
+  register: pslog_result
+  changed_when: "'enabled' in pslog_result.stdout"

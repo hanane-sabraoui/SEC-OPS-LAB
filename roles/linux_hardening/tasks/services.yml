@@ -1,0 +1,62 @@
+---
+# ============================================================
+# Service hardening — CIS 2.1-2.2 / ANSSI R16-R18
+# ============================================================
+# WHY: Every running service is attack surface. Disabling
+# unused services reduces the number of potential entry points.
+# ============================================================
+
+# --- CIS 2.1.x: Disable unnecessary services ---
+- name: "[SERVICES] Disable and stop unnecessary services"
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: no
+    masked: yes
+  loop: "{{ harden_disable_services }}"
+  ignore_errors: yes
+  # WHY: Each service may have exploitable vulnerabilities.
+  # masked=yes prevents manual restart even by root.
+
+# --- CIS 2.2.2: Ensure rsync is not enabled ---
+- name: "[SERVICES] Ensure rsync service is not enabled"
+  ansible.builtin.systemd:
+    name: rsync
+    state: stopped
+    enabled: no
+  ignore_errors: yes
+  # WHY: rsync can leak files if misconfigured — only enable when needed
+
+# --- CIS 2.2.15: Ensure mail transfer agent is local-only ---
+- name: "[SERVICES] Configure Postfix to listen on localhost only"
+  ansible.builtin.lineinfile:
+    path: /etc/postfix/main.cf
+    regexp: "^inet_interfaces"
+    line: "inet_interfaces = loopback-only"
+    state: present
+  ignore_errors: yes
+  notify: restart postfix
+  # WHY: MTA open to the network can be abused as a spam relay
+
+# --- CIS 2.2.1.1: Ensure time synchronization is in use ---
+- name: "[SERVICES] Ensure systemd-timesyncd or chrony is active"
+  ansible.builtin.systemd:
+    name: systemd-timesyncd
+    state: started
+    enabled: yes
+  ignore_errors: yes
+  # WHY: Accurate time is critical for log correlation, TLS cert validation,
+  # and Kerberos authentication. NTP drift can break forensics.
+
+# --- ANSSI R18: Ensure only necessary packages are installed ---
+- name: "[SERVICES] Remove pre-installed unnecessary packages"
+  ansible.builtin.apt:
+    name:
+      - telnet         # WHY: Unencrypted remote shell — never use on servers
+      - nis            # WHY: NIS (yp) — insecure and obsolete
+      - rsh-client     # WHY: Remote shell without encryption
+      - talk           # WHY: Chat protocol — no use on servers
+      - tftp           # WHY: Trivial FTP — no authentication
+    state: absent
+    purge: yes
+  ignore_errors: yes

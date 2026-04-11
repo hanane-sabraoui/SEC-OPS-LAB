@@ -1,0 +1,30 @@
+---
+# ============================================================
+# Role: common — Universal SSH connectivity check
+# ============================================================
+# WHY: Before any hardening, we must prove that the control
+# node can reach every target via SSH. The 'ping' module is
+# Ansible's lightweight "are you alive?" check — it does NOT
+# send ICMP; it verifies SSH + Python on the remote end.
+# For Windows (shell_type=powershell), ping may fail, so we
+# also try a raw command as a fallback.
+# ============================================================
+
+- name: "[COMMON] Verify SSH connectivity (Ansible ping)"
+  ansible.builtin.ping:
+  register: ping_result
+  ignore_errors: yes
+
+- name: "[COMMON] Fallback — raw echo for hosts where ping module fails"
+  ansible.builtin.raw: echo "SSH OK"
+  register: raw_result
+  when: ping_result is failed
+  changed_when: false
+
+- name: "[COMMON] Report connectivity status"
+  ansible.builtin.debug:
+    msg: >-
+      Host {{ inventory_hostname }} ({{ ansible_host }}) —
+      {% if ping_result is succeeded %}CONNECTED (ping)
+      {% elif raw_result is defined and raw_result is succeeded %}CONNECTED (raw)
+      {% else %}UNREACHABLE{% endif %}

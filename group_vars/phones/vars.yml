@@ -1,0 +1,18 @@
+---
+# ============================================================
+# group_vars/phones/vars.yml - Android / Termux specifics
+# ============================================================
+# WHY: Termux on Android uses a non-standard SSH port (8022)
+# and a Termux-specific user (u0_a*). Python lives under the
+# Termux prefix, not the standard /usr/bin path.
+# gather_facts is disabled because Termux may lack the Python
+# libraries Ansible's setup module expects.
+# ============================================================
+
+ansible_connection: ssh
+ansible_port: 8022
+ansible_user: u0_a338
+ansible_password: "{{ vault_phone_password }}"
+
+# Termux python path
+ansible_python_interpreter: /data/data/com.termux/files/usr/bin/python3

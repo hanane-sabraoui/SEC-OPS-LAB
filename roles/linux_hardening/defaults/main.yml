@@ -1,0 +1,37 @@
+---
+# ============================================================
+# linux_hardening/defaults/main.yml — Tunable variables
+# ============================================================
+# Override any of these in group_vars or playbook vars.
+# ============================================================
+
+# --- SSH ---
+harden_ssh_port: 22
+harden_ssh_permit_root: "no"
+harden_ssh_password_auth: "yes"          # Lab uses passwords; set "no" for prod
+harden_ssh_max_auth_tries: 4
+harden_ssh_client_alive_interval: 300
+harden_ssh_client_alive_count_max: 3
+harden_ssh_login_grace_time: 60
+harden_ssh_allowed_users: "ansible"      # Space-separated list
+
+# --- Password policy ---
+harden_pass_max_days: 365
+harden_pass_min_days: 7
+harden_pass_warn_age: 7
+harden_pass_min_length: 12
+
+# --- Audit ---
+harden_audit_max_log_file: 8            # MB
+harden_audit_space_left_action: "email"
+harden_audit_admin_space_left_action: "halt"
+
+# --- Network ---
+harden_ipv6_disable: true                # CIS 3.1.1 — Disable IPv6 if not used
+
+# --- Services to disable ---
+harden_disable_services:
+  - avahi-daemon       # WHY: mDNS/DNS-SD — attack surface for service discovery
+  - cups               # WHY: Printing — unnecessary on servers
+  - rpcbind            # WHY: NFS RPC — not needed unless using NFS
+  - snapd              # WHY: Snap package manager — reduces attack surface

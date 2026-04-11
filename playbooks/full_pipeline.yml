@@ -1,0 +1,75 @@
+---
+# ============================================================
+# playbooks/full_pipeline.yml — Complete pipeline: Jalon 1→2→3
+# ============================================================
+# Runs everything in order:
+# 1. Connectivity check (Jalon 1)
+# 2. Baseline scan (Jalon 2)
+# 3. Hardening (Jalon 3)
+# 4. Post-hardening rescan (verify >85%)
+#
+# Run: ansible-playbook playbooks/full_pipeline.yml
+# ============================================================
+
+# ===== LINUX =====
+
+- name: "PIPELINE — Linux: Connectivity Check"
+  hosts: linux_servers
+  gather_facts: no
+  roles:
+    - common
+    - linux_baseline
+
+- name: "PIPELINE — Linux: Baseline OpenSCAP Scan"
+  hosts: linux_servers
+  gather_facts: no
+  roles:
+    - openscap_scan
+
+- name: "PIPELINE — Linux: CIS/ANSSI Hardening"
+  hosts: linux_servers
+  gather_facts: yes
+  roles:
+    - linux_hardening
+
+- name: "PIPELINE — Linux: Post-Hardening OpenSCAP Rescan"
+  hosts: linux_servers
+  gather_facts: no
+  roles:
+    - openscap_rescan
+
+# ===== WINDOWS =====
+
+- name: "PIPELINE — Windows: Connectivity Check"
+  hosts: windows_machines
+  gather_facts: no
+  roles:
+    - common
+    - windows_baseline
+
+- name: "PIPELINE — Windows: Baseline HardeningKitty Scan"
+  hosts: windows_machines
+  gather_facts: no
+  roles:
+    - hardeningkitty_scan
+
+- name: "PIPELINE — Windows: CIS Hardening"
+  hosts: windows_machines
+  gather_facts: no
+  roles:
+    - windows_hardening
+
+- name: "PIPELINE — Windows: Post-Hardening HardeningKitty Rescan"
+  hosts: windows_machines
+  gather_facts: no
+  roles:
+    - hardeningkitty_rescan
+
+# ===== PHONES =====
+
+- name: "PIPELINE — Phones: Connectivity Check"
+  hosts: phones
+  gather_facts: no
+  roles:
+    - common
+    - phone_check

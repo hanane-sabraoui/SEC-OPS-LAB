@@ -1,0 +1,14 @@
+---
+# ============================================================
+# group_vars/all/vars.yml - Variables applied to EVERY host
+# ============================================================
+# WHY: Centralising shared credentials and defaults avoids
+# duplication across group files and keeps the inventory clean.
+# Sensitive values are stored in vault.yml (encrypted).
+# ============================================================
+
+ansible_user: ansible
+ansible_password: "{{ vault_ansible_password }}"
+
+# Default connection for the entire lab
+ansible_connection: ssh

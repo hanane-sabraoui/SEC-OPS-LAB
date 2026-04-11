@@ -1,0 +1,37 @@
+---
+# ============================================================
+# Handlers for linux_hardening role
+# ============================================================
+
+- name: restart sshd
+  ansible.builtin.systemd:
+    name: sshd
+    state: restarted
+    enabled: yes
+
+- name: restart auditd
+  ansible.builtin.command: service auditd restart
+  # WHY: auditd doesn't support systemctl restart when rules include -e 2 (immutable)
+
+- name: restart rsyslog
+  ansible.builtin.systemd:
+    name: rsyslog
+    state: restarted
+
+- name: restart postfix
+  ansible.builtin.systemd:
+    name: postfix
+    state: restarted
+  ignore_errors: yes
+
+- name: remount tmp
+  ansible.builtin.command: mount -o remount /tmp
+  ignore_errors: yes
+
+- name: remount var_tmp
+  ansible.builtin.command: mount -o remount /var/tmp
+  ignore_errors: yes
+
+- name: remount devshm
+  ansible.builtin.command: mount -o remount /dev/shm
+  ignore_errors: yes

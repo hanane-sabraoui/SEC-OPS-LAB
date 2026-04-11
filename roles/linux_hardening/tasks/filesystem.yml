@@ -1,0 +1,93 @@
+---
+# ============================================================
+# Filesystem hardening — CIS 1.1.x / ANSSI R28
+# ============================================================
+# WHY: Restricting filesystem features on special mount points
+# prevents attackers from executing binaries, writing files,
+# or using SUID exploits from temporary/shared locations.
+# ============================================================
+
+# --- CIS 1.1.2-1.1.5: Restrict /tmp ---
+- name: "[FS] Ensure /tmp has nodev,nosuid,noexec options"
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '^\S+\s+/tmp\s+'
+    line: "tmpfs /tmp tmpfs defaults,rw,nosuid,nodev,noexec,relatime 0 0"
+    state: present
+    backup: yes
+  # WHY: nodev prevents device files, nosuid blocks SUID escalation,
+  # noexec stops binary execution — /tmp should never run code.
+  notify: remount tmp
+
+# --- CIS 1.1.6-1.1.9: Restrict /var/tmp ---
+- name: "[FS] Ensure /var/tmp is bind-mounted from /tmp"
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '^\S+\s+/var/tmp\s+'
+    line: "/tmp /var/tmp none bind 0 0"
+    state: present
+    backup: yes
+  notify: remount var_tmp
+
+# --- CIS 1.1.21: Restrict /dev/shm ---
+- name: "[FS] Harden /dev/shm mount options"
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: '^\S+\s+/dev/shm\s+'
+    line: "tmpfs /dev/shm tmpfs defaults,nodev,nosuid,noexec 0 0"
+    state: present
+    backup: yes
+  notify: remount devshm
+
+# --- CIS 1.1.22: Disable USB storage (kernel module) ---
+- name: "[FS] Disable USB storage module (CIS 1.1.22 / ANSSI R14)"
+  ansible.builtin.copy:
+    dest: /etc/modprobe.d/usb-storage.conf
+    content: |
+      # CIS 1.1.22 / ANSSI R14: Disable USB mass storage
+      # WHY: Prevents data exfiltration via USB drives
+      install usb-storage /bin/true
+      blacklist usb-storage
+    owner: root
+    group: root
+    mode: "0644"
+
+# --- CIS 1.1.23: Disable cramfs, freevxfs, jffs2, hfs, hfsplus, squashfs, udf ---
+- name: "[FS] Disable uncommon filesystems"
+  ansible.builtin.copy:
+    dest: "/etc/modprobe.d/{{ item }}.conf"
+    content: |
+      # CIS: Disable {{ item }} filesystem
+      # WHY: Reduces kernel attack surface — these are rarely needed on servers
+      install {{ item }} /bin/true
+      blacklist {{ item }}
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - cramfs
+    - freevxfs
+    - jffs2
+    - hfs
+    - hfsplus
+    - squashfs
+    - udf
+
+# --- ANSSI R67: Disable core dumps ---
+- name: "[FS] Disable core dumps (ANSSI R67)"
+  ansible.builtin.copy:
+    dest: /etc/security/limits.d/99-hardening-coredump.conf
+    content: |
+      # ANSSI R67: Disable core dumps — prevents sensitive memory from being written to disk
+      * hard core 0
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: "[FS] Disable core dumps via sysctl"
+  ansible.builtin.sysctl:
+    name: fs.suid_dumpable
+    value: "0"
+    sysctl_set: yes
+    state: present
+    reload: yes
