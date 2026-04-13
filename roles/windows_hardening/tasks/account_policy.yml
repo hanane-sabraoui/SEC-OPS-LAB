@@ -9,7 +9,7 @@
 # ============================================================
 
 - name: "[ACCT] Configure password and lockout policies via secedit"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     # Create security template INF file
     $infContent = @"
     [Unicode]
@@ -79,7 +79,7 @@
 
 # --- CIS 1.1.7: Rename or disable Guest account ---
 - name: "[ACCT] Disable Guest account"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     $guest = Get-LocalUser -Name 'Guest' -ErrorAction SilentlyContinue
     if ($guest -and $guest.Enabled) {
         Disable-LocalUser -Name 'Guest'
@@ -92,7 +92,7 @@
 
 # --- CIS 1.1.8: Rename Administrator account ---
 - name: "[ACCT] Rename default Administrator account"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     $admin = Get-LocalUser -Name 'Administrator' -ErrorAction SilentlyContinue
     if ($admin) {
         Rename-LocalUser -Name 'Administrator' -NewName 'SecAdmin'

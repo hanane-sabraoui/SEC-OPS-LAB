@@ -8,7 +8,7 @@
 # ============================================================
 
 - name: "[NET] Disable NetBIOS over TCP/IP on all adapters"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     # WHY: NetBIOS name resolution can be poisoned (like LLMNR).
     # Disabling it forces DNS-only resolution.
     $adapters = Get-WmiObject Win32_NetworkAdapterConfiguration -Filter 'IPEnabled=True'
@@ -23,7 +23,7 @@
   changed_when: "'disabled' in netbios_result.stdout"
 
 - name: "[NET] Disable WPAD (Web Proxy Auto-Discovery)"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     # WHY: WPAD can be poisoned to redirect all HTTP traffic through an attacker's proxy
     $regPath = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings\WinHttp'
     if (!(Test-Path $regPath)) { New-Item -Path $regPath -Force | Out-Null }
@@ -40,7 +40,7 @@
   changed_when: "'disabled' in wpad_result.stdout"
 
 - name: "[NET] Disable SMBv1 protocol"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     # WHY: SMBv1 is vulnerable to EternalBlue (WannaCry/NotPetya).
     # There is no legitimate reason to run SMBv1 in 2024+
     Set-SmbServerConfiguration -EnableSMB1Protocol $false -Force -ErrorAction SilentlyContinue
@@ -60,7 +60,7 @@
   changed_when: "'disabled' in smb1_result.stdout"
 
 - name: "[NET] Enable SMB encryption"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     # WHY: SMB encryption prevents network sniffing of file transfers
     Set-SmbServerConfiguration -EncryptData $true -Force -ErrorAction SilentlyContinue
     Write-Output "SMB encryption enabled"
@@ -68,7 +68,7 @@
   changed_when: "'enabled' in smb_enc.stdout"
 
 - name: "[NET] Configure DNS client to prevent DNS devolution"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     # WHY: DNS devolution can be abused to redirect queries to malicious domains
     $regPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient'
     if (!(Test-Path $regPath)) { New-Item -Path $regPath -Force | Out-Null }

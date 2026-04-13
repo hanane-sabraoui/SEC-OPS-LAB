@@ -9,7 +9,7 @@
 # ============================================================
 
 - name: "[WINDOWS] Verify PowerShell is available via SSH"
-  ansible.builtin.raw: '$PSVersionTable.PSVersion.ToString()'
+  ansible.windows.win_shell: '$PSVersionTable.PSVersion.ToString()'
   register: ps_version
   changed_when: false
 
@@ -18,7 +18,7 @@
     msg: "PowerShell version: {{ ps_version.stdout | trim }}"
 
 - name: "[WINDOWS] Gather OS information"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     $os = Get-CimInstance Win32_OperatingSystem
     Write-Output "Hostname : $($env:COMPUTERNAME)"
     Write-Output "OS       : $($os.Caption)"
@@ -32,7 +32,7 @@
     msg: "{{ os_info.stdout_lines }}"
 
 - name: "[WINDOWS] Check SSH service status"
-  ansible.builtin.raw: 'Get-Service -Name sshd | Select-Object -Property Status, DisplayName | Format-List'
+  ansible.windows.win_shell: 'Get-Service -Name sshd | Select-Object -Property Status, DisplayName | Format-List'
   register: ssh_svc
   changed_when: false
 
@@ -41,7 +41,7 @@
     msg: "{{ ssh_svc.stdout_lines }}"
 
 - name: "[WINDOWS] List listening TCP ports"
-  ansible.builtin.raw: 'Get-NetTCPConnection -State Listen | Select-Object LocalAddress, LocalPort, OwningProcess | Sort-Object LocalPort | Format-Table -AutoSize'
+  ansible.windows.win_shell: 'Get-NetTCPConnection -State Listen | Select-Object LocalAddress, LocalPort, OwningProcess | Sort-Object LocalPort | Format-Table -AutoSize'
   register: win_ports
   changed_when: false
 
@@ -50,7 +50,7 @@
     msg: "{{ win_ports.stdout_lines }}"
 
 - name: "[WINDOWS] Check Windows Firewall status"
-  ansible.builtin.raw: 'Get-NetFirewallProfile | Select-Object Name, Enabled | Format-Table -AutoSize'
+  ansible.windows.win_shell: 'Get-NetFirewallProfile | Select-Object Name, Enabled | Format-Table -AutoSize'
   register: fw_status
   changed_when: false
 
@@ -59,7 +59,7 @@
     msg: "{{ fw_status.stdout_lines }}"
 
 - name: "[WINDOWS] Detect installed security software"
-  ansible.builtin.raw: 'Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntiVirusProduct -ErrorAction SilentlyContinue | Select-Object displayName | Format-Table -AutoSize'
+  ansible.windows.win_shell: 'Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntiVirusProduct -ErrorAction SilentlyContinue | Select-Object displayName | Format-Table -AutoSize'
   register: av_info
   changed_when: false
   ignore_errors: yes

@@ -16,7 +16,7 @@
 
 # --- Step 1: Create working directory ---
 - name: "[HKITTY] Create HardeningKitty working directory"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     if (!(Test-Path 'C:\SEC-OPS')) { New-Item -ItemType Directory -Path 'C:\SEC-OPS' -Force | Out-Null }
     if (!(Test-Path 'C:\SEC-OPS\reports')) { New-Item -ItemType Directory -Path 'C:\SEC-OPS\reports' -Force | Out-Null }
     Write-Output "Directories ready"
@@ -24,7 +24,7 @@
 
 # --- Step 2: Download HardeningKitty ---
 - name: "[HKITTY] Download HardeningKitty from GitHub"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     $hkPath = 'C:\SEC-OPS\HardeningKitty'
     if (Test-Path "$hkPath\HardeningKitty.psm1") {
         Write-Output "HardeningKitty already present"
@@ -55,7 +55,7 @@
 
 # --- Step 3: Verify HardeningKitty module loads ---
 - name: "[HKITTY] Verify HardeningKitty module is loadable"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     Import-Module 'C:\SEC-OPS\HardeningKitty\HardeningKitty.psm1' -Force -ErrorAction Stop
     Write-Output "Module loaded — version: $((Get-Module HardeningKitty).Version)"
   register: hk_verify
@@ -67,7 +67,7 @@
 
 # --- Step 4: List available finding lists (benchmarks) ---
 - name: "[HKITTY] List available CIS finding lists"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     $hkPath = 'C:\SEC-OPS\HardeningKitty'
     Get-ChildItem "$hkPath\lists\finding_list_cis*" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
     Get-ChildItem "$hkPath\lists\finding_list_msft*" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name
@@ -80,7 +80,7 @@
 
 # --- Step 5: Run CIS audit (Audit mode = non-destructive) ---
 - name: "[HKITTY] Run CIS baseline audit (Audit mode)"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     Import-Module 'C:\SEC-OPS\HardeningKitty\HardeningKitty.psm1' -Force
 
     $hkPath = 'C:\SEC-OPS\HardeningKitty'
@@ -137,7 +137,7 @@
 
 # --- Step 6: Generate HTML report from CSV ---
 - name: "[HKITTY] Generate HTML report from CSV"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     $latestCsv = Get-ChildItem 'C:\SEC-OPS\reports\cis_baseline_*.csv' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 
     if (!$latestCsv) {
@@ -226,13 +226,13 @@
   become: no
 
 - name: "[HKITTY] Find latest CSV report on target"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     (Get-ChildItem 'C:\SEC-OPS\reports\cis_baseline_*.csv' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
   register: latest_csv_path
   changed_when: false
 
 - name: "[HKITTY] Find latest HTML report on target"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     (Get-ChildItem 'C:\SEC-OPS\reports\cis_baseline_*.html' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
   register: latest_html_path
   changed_when: false

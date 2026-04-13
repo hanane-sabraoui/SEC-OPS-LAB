@@ -9,7 +9,7 @@
 # ============================================================
 
 - name: "[FW] Configure Windows Firewall profiles"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     # CIS 9.1.1-9.3.1: Enable all firewall profiles with default block inbound
     Set-NetFirewallProfile -Profile Domain -Enabled True -DefaultInboundAction Block -DefaultOutboundAction Allow -LogAllowed True -LogBlocked True -LogFileName '%SystemRoot%\System32\LogFiles\Firewall\pfirewall.log' -LogMaxSizeKilobytes 16384
     Set-NetFirewallProfile -Profile Private -Enabled True -DefaultInboundAction Block -DefaultOutboundAction Allow -LogAllowed True -LogBlocked True -LogFileName '%SystemRoot%\System32\LogFiles\Firewall\pfirewall.log' -LogMaxSizeKilobytes 16384
@@ -23,7 +23,7 @@
 
 # --- Ensure SSH is allowed (don't lock ourselves out!) ---
 - name: "[FW] Ensure SSH inbound rule exists"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     $rule = Get-NetFirewallRule -DisplayName 'OpenSSH Server (sshd)' -ErrorAction SilentlyContinue
     if (!$rule) {
         $rule = Get-NetFirewallRule -DisplayName '*SSH*' -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -40,7 +40,7 @@
 
 # --- CIS 9.x: Disable rules that shouldn't be enabled ---
 - name: "[FW] Disable insecure inbound firewall rules"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     $disabled = 0
     # Disable Remote Desktop inbound (we use SSH)
     Get-NetFirewallRule -DisplayName '*Remote Desktop*' -ErrorAction SilentlyContinue | Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' } | ForEach-Object {

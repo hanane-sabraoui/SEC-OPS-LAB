@@ -8,7 +8,7 @@
 # ============================================================
 
 - name: "[AUDIT] Configure advanced audit policies"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     # CIS 17.1.1: Audit Credential Validation
     # WHY: Detects brute-force and pass-the-hash attacks
     auditpol /set /subcategory:"Credential Validation" /success:enable /failure:enable
@@ -68,7 +68,7 @@
   changed_when: "'configured' in audit_result.stdout"
 
 - name: "[AUDIT] Enable command-line auditing in process creation events"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     # CIS 18.9.3.1: Include command line in process creation events
     # WHY: Logs the exact command that started a process — essential for detecting
     # malware execution, living-off-the-land attacks, and encoded PowerShell
@@ -80,7 +80,7 @@
   changed_when: "'enabled' in cmdline_audit.stdout"
 
 - name: "[AUDIT] Configure Event Log sizes"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     # CIS 18.9.27.x: Set minimum event log sizes
     # WHY: Default 20MB fills in minutes on a busy server — increase to retain evidence
     $logs = @{

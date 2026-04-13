@@ -7,7 +7,7 @@
 # ============================================================
 
 - name: "[RESCAN-WIN] Run post-hardening CIS audit"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     Import-Module 'C:\SEC-OPS\HardeningKitty\HardeningKitty.psm1' -Force
 
     $hkPath = 'C:\SEC-OPS\HardeningKitty'
@@ -46,7 +46,7 @@
   poll: 15
 
 - name: "[RESCAN-WIN] Generate post-hardening HTML report"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     $latestCsv = Get-ChildItem 'C:\SEC-OPS\reports\cis_post_hardening_*.csv' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
     if (!$latestCsv) { Write-Output "ERROR: No CSV found"; exit 1 }
 
@@ -102,13 +102,13 @@
   become: no
 
 - name: "[RESCAN-WIN] Find latest post-hardening CSV"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     (Get-ChildItem 'C:\SEC-OPS\reports\cis_post_hardening_*.csv' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
   register: ph_csv_path
   changed_when: false
 
 - name: "[RESCAN-WIN] Find latest post-hardening HTML"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     (Get-ChildItem 'C:\SEC-OPS\reports\cis_post_hardening_*.html' | Sort-Object LastWriteTime -Descending | Select-Object -First 1).FullName
   register: ph_html_path
   changed_when: false

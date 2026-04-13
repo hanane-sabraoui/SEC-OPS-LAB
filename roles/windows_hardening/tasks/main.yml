@@ -3,7 +3,7 @@
 # Role: windows_hardening — CIS Level 1 hardening via SSH
 # ============================================================
 # Orchestrator: includes modular task files by domain.
-# All commands use ansible.builtin.raw (PowerShell over SSH)
+# All commands use ansible.windows.win_shell (PowerShell over SSH)
 # since WinRM is not available in this lab.
 # ============================================================
 

@@ -8,7 +8,7 @@
 # ============================================================
 
 - name: "[RIGHTS] Apply user rights security template"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     $infContent = @"
     [Unicode]
     Unicode=yes
@@ -65,7 +65,7 @@
 
 # --- CIS 18.9.102: Disable PowerShell v2 engine ---
 - name: "[RIGHTS] Disable PowerShell v2 engine"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     # WHY: PS v2 engine can bypass modern security controls:
     # - No AMSI (Anti-Malware Scan Interface)
     # - No Script Block Logging
@@ -84,7 +84,7 @@
 
 # --- Enable PowerShell ScriptBlock Logging ---
 - name: "[RIGHTS] Enable PowerShell ScriptBlock Logging"
-  ansible.builtin.raw: |
+  ansible.windows.win_shell: |
     # WHY: Logs the full content of every PowerShell script block executed.
     # Essential for detecting encoded/obfuscated malicious commands.
     $regPath = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging'

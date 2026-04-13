@@ -8,61 +8,13 @@
 # ============================================================
 
 - name: "[SVC] Disable unnecessary Windows services"
-  ansible.builtin.raw: |
-    $servicesToDisable = @(
-        # CIS 5.1: Bluetooth Support Service
-        # WHY: Servers don't need Bluetooth — reduces wireless attack surface
-        'bthserv',
-
-        # CIS 5.6: Computer Browser
-        # WHY: Legacy NetBIOS browsing service — exploitable for network enumeration
-        'Browser',
-
-        # CIS 5.14: IIS Admin Service (if not a web server)
-        'IISADMIN',
-
-        # CIS 5.19: Link-Layer Topology Discovery Mapper
-        # WHY: Network mapping service — information disclosure risk
-        'lltdsvc',
-
-        # CIS 5.23: Microsoft iSCSI Initiator Service
-        'MSiSCSI',
-
-        # CIS 5.29: Print Spooler (if not a print server)
-        # WHY: PrintNightmare (CVE-2021-34527) — one of the most exploited Windows vulns
-        'Spooler',
-
-        # CIS 5.30: Remote Desktop Configuration
-        # WHY: Not needed when using SSH exclusively (our lab setup)
-        'SessionEnv',
-
-        # CIS 5.31: Remote Desktop Services
-        'TermService',
-
-        # CIS 5.32: Remote Desktop UserMode Port Redirector
-        'UmRdpService',
-
-        # CIS 5.36: Remote Registry
-        # WHY: Allows remote modification of the registry — major attack vector
-        'RemoteRegistry',
-
-        # CIS 5.39: SNMP Service
-        # WHY: SNMP v1/v2 transmit community strings in cleartext
-        'SNMP',
-
-        # CIS 5.44: Windows Error Reporting Service
-        # WHY: Can leak crash dumps containing sensitive memory to Microsoft/network
-        'WerSvc',
-
-        # CIS 5.46: Windows Push Notifications System Service
-        'WpnService',
-
-        # CIS 5.48: Xbox services (all)
-        'XblAuthManager',
-        'XblGameSave',
-        'XboxNetApiSvc',
-        'XboxGipSvc'
-    )
+  ansible.windows.win_shell: |
+    # CIS 5.x: Disable unnecessary services to reduce attack surface
+    # bthserv=Bluetooth, Browser=NetBIOS, IISADMIN=IIS, lltdsvc=LLTD
+    # MSiSCSI=iSCSI, Spooler=PrintNightmare, SessionEnv/TermService/UmRdpService=RDP
+    # RemoteRegistry=remote reg edit, SNMP=cleartext, WerSvc=error reporting
+    # WpnService=push notif, Xbl*=Xbox services
+    $servicesToDisable = "bthserv","Browser","IISADMIN","lltdsvc","MSiSCSI","Spooler","SessionEnv","TermService","UmRdpService","RemoteRegistry","SNMP","WerSvc","WpnService","XblAuthManager","XblGameSave","XboxNetApiSvc","XboxGipSvc"
 
     $disabled = 0
     $skipped = 0
