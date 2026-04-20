@@ -42,7 +42,7 @@
 
 - name: "PIPELINE — Windows: Connectivity Check"
   hosts: windows_machines
-  gather_facts: no
+  gather_facts: no--è--()
   roles:
     - common
     - windows_baseline
@@ -73,3 +73,32 @@
   roles:
     - common
     - phone_check
+
+
+
+
+
+
+
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

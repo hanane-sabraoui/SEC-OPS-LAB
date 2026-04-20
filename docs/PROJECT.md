@@ -16,8 +16,8 @@
 
 ## 1. Project Overview
 
-**SEC-OPS LAB** is a 4-week technical project that automates the **hardening and auditing** of a mixed IT infrastructure (Linux + Windows + Android) using Ansible, targeting a minimum **85% compliance score** against **ANSSI** and **CIS** security benchmarks.
-
+**SEC-OPS LAB** is a 4-week technical project that automates the **hardening and auditing** of a mixed IT infrastructure (Linux + Windows + Android) using Ansible, targeting a minimum **85% <compliance score** against **ANSSI** and **CIS** security benchmarks.
+>
 | Tool | Purpose |
 |------|---------|
 | **Ansible** | Configuration management & automation engine |
@@ -38,7 +38,7 @@ All machines are in an **isolated, air-gapped** network.
 | `win_client_10` | Windows 10 | `<WIN_10_IP>` | 22 | hanane | Win32-OpenSSH |
 | `phone` | Android (Termux) | 192.168.1.31 | 8022 | u0_a338 | Termux SSH server |
 
-**Common credentials:** `ansible` / `12345678` (except where overridden above).
+**Common credentials:** `ansible` / `azerty@123` (except where overridden above).
 
 ---
 
@@ -351,83 +351,17 @@ These scores are the "before" picture. Jalon 3 will bring them above 85%.
 
 ---
 
-## 8. Jalon 3 — CIS/ANSSI Hardening
-
-### Linux Hardening Role (`linux_hardening`)
-
-The role is split into **9 modular task files**, each addressing a CIS/ANSSI control family:
-
-| Task File | CIS Controls | ANSSI Controls | What It Does |
-|-----------|-------------|----------------|--------------|
-| `filesystem.yml` | 1.1.x | R14, R28, R67 | Mount options (noexec/nosuid/nodev), disable USB, disable uncommon FS, disable core dumps |
-| `sysctl.yml` | 3.3.x | R12, R13 | Kernel network hardening (anti-spoofing, SYN cookies, ICMP), ASLR, restrict dmesg/ptrace |
-| `ssh.yml` | 5.2.x | R33-R37 | Disable root login, strong ciphers only, session timeout, X11/TCP/agent forwarding off |
-| `auth.yml` | 5.3-5.4 | R30-R31, R51 | Password complexity (pwquality), SHA-512 hashing, account lockout, shell TMOUT, restrict su |
-| `services.yml` | 2.1-2.2 | R16-R18 | Disable avahi/cups/rpcbind/snapd, remove telnet/rsh/talk, local-only MTA |
-| `network.yml` | 3.4-3.5 | R20-R22 | UFW default deny + SSH allow, disable IPv6/DCCP/SCTP/RDS/TIPC |
-| `logging.yml` | 4.1-4.2 | R40-R42 | Install auditd, 40+ audit rules (time, identity, login, permissions, modules), rsyslog |
-| `permissions.yml` | 6.1-6.2 | R54-R57 | Lock down /etc/passwd, /etc/shadow, crontab, cron dirs, /boot |
-| `banners.yml` | 1.7.x | R20 | Legal warning banners on /etc/issue, /etc/issue.net, /etc/motd |
-
-All variables are tuneable via `roles/linux_hardening/defaults/main.yml`.
-
-### Windows Hardening Role (`windows_hardening`)
-
-The role uses 7 modular task files, all executing raw PowerShell over SSH:
-
-| Task File | CIS Controls | What It Does |
-|-----------|-------------|--------------|
-| `account_policy.yml` | 1.1-1.2 | Password history (24), min length (14), complexity, lockout (5 tries/30 min), disable Guest, rename Admin |
-| `audit_policy.yml` | 17.x, 18.9.27 | 30+ advanced audit subcategories enabled, command-line logging, event log sizes (Security=192MB) |
-| `registry.yml` | 2.3.x, 18.x | 30+ registry keys: UAC, SMB signing, NTLMv2 only, LLMNR off, LSA protection, Credential Guard, SEHOP, autoplay off, WSH off |
-| `services.yml` | 5.x | Disable Print Spooler (PrintNightmare), RDP, Remote Registry, SNMP, Xbox, Bluetooth, etc. |
-| `firewall.yml` | 9.x | All profiles enabled, default block inbound, 16MB logging, SSH whitelisted, RDP/WinRM disabled |
-| `network.yml` | 18.5-18.6 | Disable NetBIOS, WPAD, SMBv1 (EternalBlue), enable SMB encryption |
-| `user_rights.yml` | 2.2.x | Restrict network/local logon, deny Guest, disable PowerShell v2, enable ScriptBlock logging |
-
-### Running Jalon 3
-
-```bash
-# Harden both Linux + Windows
-ansible-playbook playbooks/harden.yml
-
-# Or individually
-ansible-playbook playbooks/linux_harden.yml
-ansible-playbook playbooks/windows_harden.yml
-
-# Post-hardening compliance rescan
-ansible-playbook playbooks/rescan.yml
-
-# Or run the complete pipeline (J1 → J2 → J3 + rescan)
-ansible-playbook playbooks/full_pipeline.yml
-```
-
-### Report Comparison
-
-After running `rescan.yml`, compare files in `reports/`:
-
-| File | Type | When |
-|------|------|------|
-| `*_cis_baseline.html` | OpenSCAP CIS | Before hardening |
-| `*_anssi_baseline.html` | OpenSCAP ANSSI | Before hardening |
-| `*_cis_post_hardening.html` | OpenSCAP CIS | After hardening |
-| `*_anssi_post_hardening.html` | OpenSCAP ANSSI | After hardening |
-| `*_cis_baseline.html` | HardeningKitty | Before hardening |
-| `*_cis_post_hardening.html` | HardeningKitty | After hardening |
-
----
-
-## 9. Jalon Roadmap
+## 8. Jalon Roadmap
 
 | Jalon | Status | Description |
 |-------|--------|-------------|
 | **Jalon 1** | Complete | Validate SSH connectivity, build inventory & roles structure |
-| **Jalon 2** | Complete | Blank compliance scan: OpenSCAP + HardeningKitty → HTML baseline reports |
-| **Jalon 3** | Complete | CIS/ANSSI hardening roles → target >85% compliance |
+| **Jalon 2** | **Current** | Blank compliance scan: OpenSCAP (Linux), HardeningKitty (Windows) → HTML baseline reports |
+| Jalon 3 | Pending | Ansible hardening roles (CIS/ANSSI) → achieve >85% compliance |
 
 ---
 
-## 10. Troubleshooting
+## 9. Troubleshooting
 
 ### Common Issues
 
@@ -444,11 +378,6 @@ After running `rescan.yml`, compare files in `reports/`:
 | OpenSCAP `exit code 1` | Scanner error | Check SSG content: `ls /usr/share/xml/scap/ssg/content/` |
 | HardeningKitty download fails | No internet / TLS error | Manually copy HardeningKitty ZIP to `C:\SEC-OPS\` on Windows target |
 | HardeningKitty `No CIS finding list` | Missing list for OS | Check `C:\SEC-OPS\HardeningKitty\lists\` — may need newer HardeningKitty version |
-| **UFW locks you out** | SSH rule not added before default deny | Role adds SSH allow first; if locked out, access console and run `ufw allow 22/tcp` |
-| **auditd rules don't apply** | Immutable flag (`-e 2`) active | Requires a **full reboot** to load new rules after changes |
-| **secedit fails on non-domain PC** | Template references domain-only settings | Expected on standalone — some policies only apply to domain-joined machines |
-| **Windows service won't stop** | Running as dependency | Stop dependent services first, or set StartupType to Disabled and reboot |
-| **Password policy not enforced** | Local policy overridden by GPO | On domain-joined machines, domain GPO takes precedence over local secedit |
 
 ### Enabling Win32-OpenSSH (Windows)
 
@@ -484,4 +413,13 @@ passwd # Set password
 
 ---
 
-> **Project status:** Jalons 1–3 are complete. Run the full pipeline with `ansible-playbook playbooks/full_pipeline.yml` to execute connectivity checks → baseline scans → hardening → compliance rescan in one shot. Compare before/after HTML reports in `reports/` to verify the >85% CIS/ANSSI compliance target.
+> **Next step:** Run `ansible-playbook playbooks/baseline_scan.yml` (or `linux_scan.yml` / `windows_scan.yml` individually). Open the HTML reports in `reports/` to see baseline compliance scores. Once confirmed, we proceed to **Jalon 3** (hardening roles to reach >85%).
+
+
+
+
+
+
+
+
+

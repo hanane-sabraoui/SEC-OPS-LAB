@@ -25,3 +25,16 @@
   gather_facts: no
   roles:
     - hardeningkitty_scan
+
+
+
+
+
+
+
+
+
+
+
+
+  
