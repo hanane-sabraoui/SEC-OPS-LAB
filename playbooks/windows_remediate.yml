@@ -1,15 +1,9 @@
 ---
 # ============================================================
-# playbooks/windows_harden.yml — Windows-only hardening + remediation
+# playbooks/windows_remediate.yml — Windows-only auto-remediation
 # ============================================================
-# Run: ansible-playbook playbooks/windows_harden.yml
+# Run: ansible-playbook playbooks/windows_remediate.yml
 # ============================================================
-
-- name: "Windows Machines — CIS Manual Hardening"
-  hosts: windows_machines
-  gather_facts: no
-  roles:
-    - windows_hardening
 
 - name: "Windows Machines — HardeningKitty HailMary Auto-Fix"
   hosts: windows_machines

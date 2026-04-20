@@ -104,14 +104,69 @@
       XML results: /tmp/openscap_reports/anssi_baseline_results.xml
 
 # --- Step 7: Generate score summary from XML ---
-- name: "[OPENSCAP] Extract CIS score from XML results"
+- name: "[OPENSCAP] Extract CIS baseline score"
   ansible.builtin.shell: |
-    oscap xccdf generate report /tmp/openscap_reports/cis_baseline_results.xml 2>/dev/null | \
-    grep -oP 'Score:.*?[\d.]+' | head -1 || \
-    grep -c 'result="pass"' /tmp/openscap_reports/cis_baseline_results.xml || echo "Score extraction requires manual review of HTML report"
+    set -o pipefail
+    TOTAL=$(grep -c '<rule-result' /tmp/openscap_reports/cis_baseline_results.xml 2>/dev/null || echo 0)
+    PASS=$(grep -c 'result">pass</result' /tmp/openscap_reports/cis_baseline_results.xml 2>/dev/null || echo 0)
+    FAIL=$(grep -c 'result">fail</result' /tmp/openscap_reports/cis_baseline_results.xml 2>/dev/null || echo 0)
+    NOTAPPL=$(grep -c 'result">notapplicable</result' /tmp/openscap_reports/cis_baseline_results.xml 2>/dev/null || echo 0)
+    NOTCHK=$(grep -c 'result">notchecked</result' /tmp/openscap_reports/cis_baseline_results.xml 2>/dev/null || echo 0)
+    CHECKED=$((PASS + FAIL))
+    if [ "$CHECKED" -gt 0 ]; then
+      SCORE=$(( PASS * 100 / CHECKED ))
+    else
+      SCORE=0
+    fi
+    echo "========================================"
+    echo "  CIS BASELINE SCORE"
+    echo "========================================"
+    echo "Total rules    : $TOTAL"
+    echo "Passed         : $PASS"
+    echo "Failed         : $FAIL"
+    echo "Not applicable : $NOTAPPL"
+    echo "Not checked    : $NOTCHK"
+    echo "SCORE          : ${SCORE}%"
+    echo "========================================"
+  args:
+    executable: /bin/bash
   register: cis_score_raw
   changed_when: false
-  ignore_errors: yes
+
+- name: "[OPENSCAP] Display CIS baseline score"
+  ansible.builtin.debug:
+    msg: "{{ cis_score_raw.stdout_lines }}"
+
+- name: "[OPENSCAP] Extract ANSSI baseline score"
+  ansible.builtin.shell: |
+    set -o pipefail
+    TOTAL=$(grep -c '<rule-result' /tmp/openscap_reports/anssi_baseline_results.xml 2>/dev/null || echo 0)
+    PASS=$(grep -c 'result">pass</result' /tmp/openscap_reports/anssi_baseline_results.xml 2>/dev/null || echo 0)
+    FAIL=$(grep -c 'result">fail</result' /tmp/openscap_reports/anssi_baseline_results.xml 2>/dev/null || echo 0)
+    NOTAPPL=$(grep -c 'result">notapplicable</result' /tmp/openscap_reports/anssi_baseline_results.xml 2>/dev/null || echo 0)
+    CHECKED=$((PASS + FAIL))
+    if [ "$CHECKED" -gt 0 ]; then
+      SCORE=$(( PASS * 100 / CHECKED ))
+    else
+      SCORE=0
+    fi
+    echo "========================================"
+    echo "  ANSSI BP28 BASELINE SCORE"
+    echo "========================================"
+    echo "Total rules    : $TOTAL"
+    echo "Passed         : $PASS"
+    echo "Failed         : $FAIL"
+    echo "Not applicable : $NOTAPPL"
+    echo "SCORE          : ${SCORE}%"
+    echo "========================================"
+  args:
+    executable: /bin/bash
+  register: anssi_score_raw
+  changed_when: false
+
+- name: "[OPENSCAP] Display ANSSI baseline score"
+  ansible.builtin.debug:
+    msg: "{{ anssi_score_raw.stdout_lines }}"
 
 # --- Step 8: Fetch reports to control node ---
 - name: "[OPENSCAP] Ensure local reports directory exists"

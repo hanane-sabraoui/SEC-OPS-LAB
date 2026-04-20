@@ -1,0 +1,25 @@
+---
+# ============================================================
+# playbooks/remediate.yml — Auto-remediation for both OS
+# ============================================================
+# Uses OpenSCAP --remediate for Linux and HardeningKitty
+# HailMary mode for Windows to automatically fix CIS/ANSSI
+# findings beyond what the manual hardening roles cover.
+#
+# Run AFTER harden.yml for maximum compliance:
+#   1. ansible-playbook playbooks/harden.yml
+#   2. ansible-playbook playbooks/remediate.yml
+#   3. ansible-playbook playbooks/rescan.yml
+# ============================================================
+
+- name: "REMEDIATION — Linux: OpenSCAP Auto-Fix (CIS + ANSSI)"
+  hosts: linux_servers
+  gather_facts: yes
+  roles:
+    - openscap_remediate
+
+- name: "REMEDIATION — Windows: HardeningKitty HailMary Auto-Fix"
+  hosts: windows_machines
+  gather_facts: no
+  roles:
+    - hardeningkitty_remediate

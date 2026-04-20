@@ -1,0 +1,197 @@
+---
+# ============================================================
+# playbooks/generate_report.yml — Generate comparison summary
+# ============================================================
+# Generates a before/after compliance comparison report on the
+# control node from the XML results in reports/.
+#
+# Run AFTER baseline_scan + harden + rescan:
+#   ansible-playbook playbooks/generate_report.yml
+# ============================================================
+
+- name: "REPORT — Generate compliance comparison summary"
+  hosts: localhost
+  connection: local
+  gather_facts: yes
+  tasks:
+
+    - name: "[REPORT] Find all Linux baseline XML results"
+      ansible.builtin.find:
+        paths: "{{ playbook_dir }}/../reports/linux/"
+        patterns: "*_cis_baseline.xml"
+      register: linux_baseline_files
+
+    - name: "[REPORT] Find all Linux post-hardening XML results"
+      ansible.builtin.find:
+        paths: "{{ playbook_dir }}/../reports/linux/"
+        patterns: "*_cis_post_hardening_results.xml"
+      register: linux_post_files
+
+    - name: "[REPORT] Extract Linux baseline scores"
+      ansible.builtin.shell: |
+        set -o pipefail
+        for xmlfile in {{ playbook_dir }}/../reports/linux/*_cis_baseline.xml; do
+          [ -f "$xmlfile" ] || continue
+          HOST=$(basename "$xmlfile" | sed 's/_cis_baseline.xml//')
+          PASS=$(grep -c 'result">pass</result' "$xmlfile" 2>/dev/null || echo 0)
+          FAIL=$(grep -c 'result">fail</result' "$xmlfile" 2>/dev/null || echo 0)
+          CHECKED=$((PASS + FAIL))
+          if [ "$CHECKED" -gt 0 ]; then
+            SCORE=$(( PASS * 100 / CHECKED ))
+          else
+            SCORE=0
+          fi
+          echo "$HOST|CIS|BASELINE|$PASS|$FAIL|$CHECKED|${SCORE}%"
+        done
+        for xmlfile in {{ playbook_dir }}/../reports/linux/*_anssi_baseline.xml; do
+          [ -f "$xmlfile" ] || continue
+          HOST=$(basename "$xmlfile" | sed 's/_anssi_baseline.xml//')
+          PASS=$(grep -c 'result">pass</result' "$xmlfile" 2>/dev/null || echo 0)
+          FAIL=$(grep -c 'result">fail</result' "$xmlfile" 2>/dev/null || echo 0)
+          CHECKED=$((PASS + FAIL))
+          if [ "$CHECKED" -gt 0 ]; then
+            SCORE=$(( PASS * 100 / CHECKED ))
+          else
+            SCORE=0
+          fi
+          echo "$HOST|ANSSI|BASELINE|$PASS|$FAIL|$CHECKED|${SCORE}%"
+        done
+      args:
+        executable: /bin/bash
+      register: baseline_scores
+      changed_when: false
+      ignore_errors: yes
+
+    - name: "[REPORT] Extract Linux post-hardening scores"
+      ansible.builtin.shell: |
+        set -o pipefail
+        for xmlfile in {{ playbook_dir }}/../reports/linux/*_cis_post_hardening_results.xml; do
+          [ -f "$xmlfile" ] || continue
+          HOST=$(basename "$xmlfile" | sed 's/_cis_post_hardening_results.xml//')
+          PASS=$(grep -c 'result">pass</result' "$xmlfile" 2>/dev/null || echo 0)
+          FAIL=$(grep -c 'result">fail</result' "$xmlfile" 2>/dev/null || echo 0)
+          FIXED=$(grep -c 'result">fixed</result' "$xmlfile" 2>/dev/null || echo 0)
+          CHECKED=$((PASS + FAIL + FIXED))
+          if [ "$CHECKED" -gt 0 ]; then
+            SCORE=$(( (PASS + FIXED) * 100 / CHECKED ))
+          else
+            SCORE=0
+          fi
+          echo "$HOST|CIS|POST-HARDENING|$PASS|$FAIL|$CHECKED|${SCORE}%"
+        done
+        for xmlfile in {{ playbook_dir }}/../reports/linux/*_anssi_post_hardening_results.xml; do
+          [ -f "$xmlfile" ] || continue
+          HOST=$(basename "$xmlfile" | sed 's/_anssi_post_hardening_results.xml//')
+          PASS=$(grep -c 'result">pass</result' "$xmlfile" 2>/dev/null || echo 0)
+          FAIL=$(grep -c 'result">fail</result' "$xmlfile" 2>/dev/null || echo 0)
+          FIXED=$(grep -c 'result">fixed</result' "$xmlfile" 2>/dev/null || echo 0)
+          CHECKED=$((PASS + FAIL + FIXED))
+          if [ "$CHECKED" -gt 0 ]; then
+            SCORE=$(( (PASS + FIXED) * 100 / CHECKED ))
+          else
+            SCORE=0
+          fi
+          echo "$HOST|ANSSI|POST-HARDENING|$PASS|$FAIL|$CHECKED|${SCORE}%"
+        done
+      args:
+        executable: /bin/bash
+      register: post_scores
+      changed_when: false
+      ignore_errors: yes
+
+    - name: "[REPORT] Generate HTML comparison report"
+      ansible.builtin.copy:
+        dest: "{{ playbook_dir }}/../reports/compliance_summary.html"
+        content: |
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>SEC-LAb Compliance Summary — {{ ansible_date_time.date }}</title>
+            <style>
+              body { font-family: 'Segoe UI', Arial, sans-serif; margin: 30px; background: #f0f2f5; }
+              h1 { color: #1a237e; border-bottom: 3px solid #1a237e; padding-bottom: 10px; }
+              h2 { color: #283593; margin-top: 30px; }
+              .card { background: #fff; padding: 20px; border-radius: 8px; margin: 15px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+              table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+              th { background: #1a237e; color: white; padding: 12px 15px; text-align: left; }
+              td { padding: 10px 15px; border-bottom: 1px solid #e0e0e0; }
+              tr:nth-child(even) { background: #f5f5f5; }
+              .good { color: #2e7d32; font-weight: bold; }
+              .warn { color: #f57f17; font-weight: bold; }
+              .bad { color: #c62828; font-weight: bold; }
+              .pipeline { background: #e8eaf6; padding: 15px; border-radius: 8px; margin: 10px 0; font-family: monospace; }
+              .footer { margin-top: 40px; color: #666; font-size: 12px; border-top: 1px solid #ddd; padding-top: 10px; }
+            </style>
+          </head>
+          <body>
+            <h1>SEC-LAb — Compliance Summary Report</h1>
+            <p>Generated: {{ ansible_date_time.date }} {{ ansible_date_time.time }}</p>
+
+            <div class="card">
+              <h2>Pipeline Workflow</h2>
+              <div class="pipeline">
+                Baseline Scan → Manual Hardening → Auto-Remediation → Rescan → Report
+              </div>
+              <p><strong>Standards applied:</strong> CIS Level 1 Server + ANSSI BP28 Enhanced</p>
+              <p><strong>Tools:</strong> OpenSCAP (Linux) | HardeningKitty (Windows)</p>
+            </div>
+
+            <div class="card">
+              <h2>Linux Servers — Baseline Scores</h2>
+              <pre>{{ baseline_scores.stdout | default('No baseline data found. Run baseline_scan.yml first.') }}</pre>
+            </div>
+
+            <div class="card">
+              <h2>Linux Servers — Post-Hardening Scores</h2>
+              <pre>{{ post_scores.stdout | default('No post-hardening data found. Run harden.yml + rescan.yml first.') }}</pre>
+            </div>
+
+            <div class="card">
+              <h2>Available Reports</h2>
+              <table>
+                <tr><th>Type</th><th>File</th></tr>
+                <tr><td>Linux CIS Baseline</td><td>reports/linux/*_cis_baseline.html</td></tr>
+                <tr><td>Linux ANSSI Baseline</td><td>reports/linux/*_anssi_baseline.html</td></tr>
+                <tr><td>Linux CIS Post-Hardening</td><td>reports/linux/*_cis_post_hardening_report.html</td></tr>
+                <tr><td>Linux ANSSI Post-Hardening</td><td>reports/linux/*_anssi_post_hardening_report.html</td></tr>
+                <tr><td>Linux CIS Remediation</td><td>reports/linux/*_cis_remediation_report.html</td></tr>
+                <tr><td>Linux ANSSI Remediation</td><td>reports/linux/*_anssi_remediation_report.html</td></tr>
+                <tr><td>Windows CIS Baseline</td><td>reports/windows/*_cis_baseline.html</td></tr>
+                <tr><td>Windows CIS Post-Hardening</td><td>reports/windows/*_cis_post_hardening.html</td></tr>
+              </table>
+            </div>
+
+            <div class="card">
+              <h2>Methodology</h2>
+              <ol>
+                <li><strong>Jalon 1 — Connectivity:</strong> SSH verification to all targets</li>
+                <li><strong>Jalon 2 — Baseline Scan:</strong> OpenSCAP CIS/ANSSI (Linux) + HardeningKitty CIS (Windows)</li>
+                <li><strong>Jalon 3a — Manual Hardening:</strong> Ansible roles applying CIS/ANSSI controls (SSH, auth, sysctl, firewall, services, etc.)</li>
+                <li><strong>Jalon 3b — Auto-Remediation:</strong> OpenSCAP --remediate (Linux) + HardeningKitty HailMary (Windows)</li>
+                <li><strong>Jalon 3c — Rescan:</strong> Same scanners re-run to measure improvement and prove >85% compliance</li>
+              </ol>
+            </div>
+
+            <div class="footer">
+              <p>SEC-LAb Security Automation Project — Generated by Ansible</p>
+            </div>
+          </body>
+          </html>
+        mode: "0644"
+
+    - name: "[REPORT] Summary report generated"
+      ansible.builtin.debug:
+        msg: |
+          ╔══════════════════════════════════════════════════════════════╗
+          ║         COMPLIANCE SUMMARY REPORT — GENERATED               ║
+          ╠══════════════════════════════════════════════════════════════╣
+          ║ File: reports/compliance_summary.html                       ║
+          ║                                                              ║
+          ║ Linux baseline scores:                                       ║
+          {{ baseline_scores.stdout_lines | default(['  No data']) | join('\n') }}
+          ║                                                              ║
+          ║ Linux post-hardening scores:                                 ║
+          {{ post_scores.stdout_lines | default(['  No data']) | join('\n') }}
+          ║                                                              ║
+          ║ Open reports/compliance_summary.html in a browser.           ║
+          ╚══════════════════════════════════════════════════════════════╝

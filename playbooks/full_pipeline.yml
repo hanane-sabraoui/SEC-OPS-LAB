@@ -5,8 +5,9 @@
 # Runs everything in order:
 # 1. Connectivity check (Jalon 1)
 # 2. Baseline scan (Jalon 2)
-# 3. Hardening (Jalon 3)
-# 4. Post-hardening rescan (verify >85%)
+# 3. Manual hardening (Jalon 3a)
+# 4. Auto-remediation via OpenSCAP/HardeningKitty (Jalon 3b)
+# 5. Post-hardening rescan (verify >85%)
 #
 # Run: ansible-playbook playbooks/full_pipeline.yml
 # ============================================================
@@ -26,11 +27,17 @@
   roles:
     - openscap_scan
 
-- name: "PIPELINE — Linux: CIS/ANSSI Hardening"
+- name: "PIPELINE — Linux: CIS/ANSSI Manual Hardening"
   hosts: linux_servers
   gather_facts: yes
   roles:
     - linux_hardening
+
+- name: "PIPELINE — Linux: OpenSCAP Auto-Remediation"
+  hosts: linux_servers
+  gather_facts: yes
+  roles:
+    - openscap_remediate
 
 - name: "PIPELINE — Linux: Post-Hardening OpenSCAP Rescan"
   hosts: linux_servers
@@ -42,7 +49,7 @@
 
 - name: "PIPELINE — Windows: Connectivity Check"
   hosts: windows_machines
-  gather_facts: no--è--()
+  gather_facts: no
   roles:
     - common
     - windows_baseline
@@ -53,11 +60,17 @@
   roles:
     - hardeningkitty_scan
 
-- name: "PIPELINE — Windows: CIS Hardening"
+- name: "PIPELINE — Windows: CIS Manual Hardening"
   hosts: windows_machines
   gather_facts: no
   roles:
     - windows_hardening
+
+- name: "PIPELINE — Windows: HardeningKitty HailMary Auto-Remediation"
+  hosts: windows_machines
+  gather_facts: no
+  roles:
+    - hardeningkitty_remediate
 
 - name: "PIPELINE — Windows: Post-Hardening HardeningKitty Rescan"
   hosts: windows_machines

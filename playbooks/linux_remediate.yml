@@ -1,0 +1,12 @@
+---
+# ============================================================
+# playbooks/linux_remediate.yml — Linux-only auto-remediation
+# ============================================================
+# Run: ansible-playbook playbooks/linux_remediate.yml
+# ============================================================
+
+- name: "Linux Servers — OpenSCAP Auto-Remediation (CIS + ANSSI)"
+  hosts: linux_servers
+  gather_facts: yes
+  roles:
+    - openscap_remediate

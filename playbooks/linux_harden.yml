@@ -1,12 +1,18 @@
 ---
 # ============================================================
-# playbooks/linux_harden.yml — Linux-only hardening
+# playbooks/linux_harden.yml — Linux-only hardening + remediation
 # ============================================================
 # Run: ansible-playbook playbooks/linux_harden.yml
 # ============================================================
 
-- name: "Linux Servers — CIS/ANSSI Hardening"
+- name: "Linux Servers — CIS/ANSSI Manual Hardening"
   hosts: linux_servers
   gather_facts: yes
   roles:
     - linux_hardening
+
+- name: "Linux Servers — OpenSCAP Auto-Remediation"
+  hosts: linux_servers
+  gather_facts: yes
+  roles:
+    - openscap_remediate

@@ -42,6 +42,73 @@
   failed_when: anssi_rescan.rc == 1
   changed_when: false
 
+# --- Extract post-hardening scores ---
+- name: "[RESCAN] Extract CIS post-hardening score"
+  ansible.builtin.shell: |
+    set -o pipefail
+    TOTAL=$(grep -c '<rule-result' /tmp/openscap_reports/cis_post_hardening_results.xml 2>/dev/null || echo 0)
+    PASS=$(grep -c 'result">pass</result' /tmp/openscap_reports/cis_post_hardening_results.xml 2>/dev/null || echo 0)
+    FAIL=$(grep -c 'result">fail</result' /tmp/openscap_reports/cis_post_hardening_results.xml 2>/dev/null || echo 0)
+    FIXED=$(grep -c 'result">fixed</result' /tmp/openscap_reports/cis_post_hardening_results.xml 2>/dev/null || echo 0)
+    NOTAPPL=$(grep -c 'result">notapplicable</result' /tmp/openscap_reports/cis_post_hardening_results.xml 2>/dev/null || echo 0)
+    CHECKED=$((PASS + FAIL + FIXED))
+    if [ "$CHECKED" -gt 0 ]; then
+      SCORE=$(( (PASS + FIXED) * 100 / CHECKED ))
+    else
+      SCORE=0
+    fi
+    echo "========================================"
+    echo "  CIS POST-HARDENING SCORE"
+    echo "========================================"
+    echo "Total rules    : $TOTAL"
+    echo "Passed         : $PASS"
+    echo "Fixed          : $FIXED"
+    echo "Failed         : $FAIL"
+    echo "Not applicable : $NOTAPPL"
+    echo "SCORE          : ${SCORE}%"
+    echo "========================================"
+  args:
+    executable: /bin/bash
+  register: cis_post_score
+  changed_when: false
+
+- name: "[RESCAN] Display CIS post-hardening score"
+  ansible.builtin.debug:
+    msg: "{{ cis_post_score.stdout_lines }}"
+
+- name: "[RESCAN] Extract ANSSI post-hardening score"
+  ansible.builtin.shell: |
+    set -o pipefail
+    TOTAL=$(grep -c '<rule-result' /tmp/openscap_reports/anssi_post_hardening_results.xml 2>/dev/null || echo 0)
+    PASS=$(grep -c 'result">pass</result' /tmp/openscap_reports/anssi_post_hardening_results.xml 2>/dev/null || echo 0)
+    FAIL=$(grep -c 'result">fail</result' /tmp/openscap_reports/anssi_post_hardening_results.xml 2>/dev/null || echo 0)
+    FIXED=$(grep -c 'result">fixed</result' /tmp/openscap_reports/anssi_post_hardening_results.xml 2>/dev/null || echo 0)
+    NOTAPPL=$(grep -c 'result">notapplicable</result' /tmp/openscap_reports/anssi_post_hardening_results.xml 2>/dev/null || echo 0)
+    CHECKED=$((PASS + FAIL + FIXED))
+    if [ "$CHECKED" -gt 0 ]; then
+      SCORE=$(( (PASS + FIXED) * 100 / CHECKED ))
+    else
+      SCORE=0
+    fi
+    echo "========================================"
+    echo "  ANSSI BP28 POST-HARDENING SCORE"
+    echo "========================================"
+    echo "Total rules    : $TOTAL"
+    echo "Passed         : $PASS"
+    echo "Fixed          : $FIXED"
+    echo "Failed         : $FAIL"
+    echo "Not applicable : $NOTAPPL"
+    echo "SCORE          : ${SCORE}%"
+    echo "========================================"
+  args:
+    executable: /bin/bash
+  register: anssi_post_score
+  changed_when: false
+
+- name: "[RESCAN] Display ANSSI post-hardening score"
+  ansible.builtin.debug:
+    msg: "{{ anssi_post_score.stdout_lines }}"
+
 # --- Fetch reports ---
 - name: "[RESCAN] Ensure local reports directory exists"
   ansible.builtin.file:

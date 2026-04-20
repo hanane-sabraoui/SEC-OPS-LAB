@@ -3,17 +3,34 @@
 # playbooks/harden.yml — Master hardening playbook (Jalon 3)
 # ============================================================
 # Applies CIS/ANSSI hardening to both Linux and Windows hosts.
+# Phase 1: Manual hardening roles (targeted fixes)
+# Phase 2: Auto-remediation (OpenSCAP/HardeningKitty catch remaining)
+#
 # Run: ansible-playbook playbooks/harden.yml
 # ============================================================
 
-- name: "JALON 3 — Linux: CIS/ANSSI Hardening"
+# --- Phase 1: Manual hardening ---
+- name: "JALON 3a — Linux: CIS/ANSSI Manual Hardening"
   hosts: linux_servers
   gather_facts: yes
   roles:
     - linux_hardening
 
-- name: "JALON 3 — Windows: CIS Hardening"
+- name: "JALON 3a — Windows: CIS Manual Hardening"
   hosts: windows_machines
   gather_facts: no
   roles:
     - windows_hardening
+
+# --- Phase 2: Auto-remediation ---
+- name: "JALON 3b — Linux: OpenSCAP Auto-Remediation"
+  hosts: linux_servers
+  gather_facts: yes
+  roles:
+    - openscap_remediate
+
+- name: "JALON 3b — Windows: HardeningKitty HailMary Auto-Fix"
+  hosts: windows_machines
+  gather_facts: no
+  roles:
+    - hardeningkitty_remediate
