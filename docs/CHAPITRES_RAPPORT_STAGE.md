@@ -343,7 +343,7 @@ Cette section decrit le role de chaque playbook present dans le projet afin de c
 - `playbooks/windows_scan.yml` : scan baseline Windows via HardeningKitty.
 - `playbooks/windows_harden.yml` : durcissement Windows (manuel + HailMary).
 - `playbooks/windows_remediate.yml` : remediation Windows uniquement via HardeningKitty HailMary.
-
+d
 ### 6.4 Playbook Android
 
 - `playbooks/phone_check.yml` : test de connectivite et collecte d'informations minimales sur les telephones Android (Termux SSH).
