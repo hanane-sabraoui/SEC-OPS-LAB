@@ -16,7 +16,7 @@
 - name: "[REMEDIATE] Ensure OpenSCAP and SSG content are installed"
   ansible.builtin.apt:
     name:
-      - libopenscap8
+      - libopenscap25
       - ssg-debderived
     state: present
     update_cache: yes
@@ -31,7 +31,7 @@
 
 - name: "[REMEDIATE] Set datastream path"
   ansible.builtin.set_fact:
-    ssg_datastream: "{{ ssg_files.files | sort(attribute='path') | last | attr('path') }}"
+    ssg_datastream: "{{ (ssg_files.files | sort(attribute='path') | last).path }}"
   when: ssg_files.matched > 0
 
 - name: "[REMEDIATE] Fail if no SSG content found"
@@ -71,25 +71,26 @@
       Remediation report: /tmp/openscap_reports/cis_remediation_report.html
 
 # --- Step 5: Run ANSSI BP28 remediation ---
-- name: "[REMEDIATE] Run ANSSI BP28 Enhanced auto-remediation"
-  ansible.builtin.command:
-    cmd: >
-      oscap xccdf eval
-      --remediate
-      --profile xccdf_org.ssgproject.content_profile_anssi_bp28_enhanced
-      --report /tmp/openscap_reports/anssi_remediation_report.html
-      --results /tmp/openscap_reports/anssi_remediation_results.xml
-      {{ ssg_datastream }}
-  register: anssi_remediate
-  failed_when: anssi_remediate.rc == 1
-  changed_when: anssi_remediate.rc == 2 or anssi_remediate.rc == 0
-
-- name: "[REMEDIATE] Display ANSSI remediation summary"
-  ansible.builtin.debug:
-    msg: |
-      === ANSSI BP28 Auto-Remediation Complete ===
-      Exit code: {{ anssi_remediate.rc }} (0=all pass, 2=some still fail)
-      Remediation report: /tmp/openscap_reports/anssi_remediation_report.html
+# NOTE: ANSSI profile not available in Ubuntu 22.04 SSG - commented out
+# - name: "[REMEDIATE] Run ANSSI BP28 Enhanced auto-remediation"
+#   ansible.builtin.command:
+#     cmd: >
+#       oscap xccdf eval
+#       --remediate
+#       --profile xccdf_org.ssgproject.content_profile_anssi_bp28_enhanced
+#       --report /tmp/openscap_reports/anssi_remediation_report.html
+#       --results /tmp/openscap_reports/anssi_remediation_results.xml
+#       {{ ssg_datastream }}
+#   register: anssi_remediate
+#   failed_when: anssi_remediate.rc == 1
+#   changed_when: anssi_remediate.rc == 2 or anssi_remediate.rc == 0
+#
+# - name: "[REMEDIATE] Display ANSSI remediation summary"
+#   ansible.builtin.debug:
+#     msg: |
+#       === ANSSI BP28 Auto-Remediation Complete ===
+#       Exit code: {{ anssi_remediate.rc }} (0=all pass, 2=some still fail)
+#       Remediation report: /tmp/openscap_reports/anssi_remediation_report.html
 
 # --- Step 6: Extract remediation scores from XML ---
 - name: "[REMEDIATE] Extract CIS remediation score"
@@ -125,38 +126,39 @@
   ansible.builtin.debug:
     msg: "{{ cis_score.stdout_lines }}"
 
-- name: "[REMEDIATE] Extract ANSSI remediation score"
-  ansible.builtin.shell: |
-    set -o pipefail
-    TOTAL=$(grep -c '<rule-result' /tmp/openscap_reports/anssi_remediation_results.xml 2>/dev/null || echo 0)
-    PASS=$(grep -c 'result">pass</result' /tmp/openscap_reports/anssi_remediation_results.xml 2>/dev/null || echo 0)
-    FAIL=$(grep -c 'result">fail</result' /tmp/openscap_reports/anssi_remediation_results.xml 2>/dev/null || echo 0)
-    FIXED=$(grep -c 'result">fixed</result' /tmp/openscap_reports/anssi_remediation_results.xml 2>/dev/null || echo 0)
-    NOTAPPL=$(grep -c 'result">notapplicable</result' /tmp/openscap_reports/anssi_remediation_results.xml 2>/dev/null || echo 0)
-    CHECKED=$((PASS + FAIL + FIXED))
-    if [ "$CHECKED" -gt 0 ]; then
-      SCORE=$(( (PASS + FIXED) * 100 / CHECKED ))
-    else
-      SCORE=0
-    fi
-    echo "========================================"
-    echo "  ANSSI BP28 REMEDIATION SCORE"
-    echo "========================================"
-    echo "Total rules  : $TOTAL"
-    echo "Passed       : $PASS"
-    echo "Fixed        : $FIXED"
-    echo "Failed       : $FAIL"
-    echo "Not applicable: $NOTAPPL"
-    echo "SCORE        : ${SCORE}%"
-    echo "========================================"
-  args:
-    executable: /bin/bash
-  register: anssi_score
-  changed_when: false
-
-- name: "[REMEDIATE] Display ANSSI remediation score"
-  ansible.builtin.debug:
-    msg: "{{ anssi_score.stdout_lines }}"
+# NOTE: ANSSI profile not available in Ubuntu 22.04 SSG - commented out
+# - name: "[REMEDIATE] Extract ANSSI remediation score"
+#   ansible.builtin.shell: |
+#     set -o pipefail
+#     TOTAL=$(grep -c '<rule-result' /tmp/openscap_reports/anssi_remediation_results.xml 2>/dev/null || echo 0)
+#     PASS=$(grep -c 'result">pass</result' /tmp/openscap_reports/anssi_remediation_results.xml 2>/dev/null || echo 0)
+#     FAIL=$(grep -c 'result">fail</result' /tmp/openscap_reports/anssi_remediation_results.xml 2>/dev/null || echo 0)
+#     FIXED=$(grep -c 'result">fixed</result' /tmp/openscap_reports/anssi_remediation_results.xml 2>/dev/null || echo 0)
+#     NOTAPPL=$(grep -c 'result">notapplicable</result' /tmp/openscap_reports/anssi_remediation_results.xml 2>/dev/null || echo 0)
+#     CHECKED=$((PASS + FAIL + FIXED))
+#     if [ "$CHECKED" -gt 0 ]; then
+#       SCORE=$(( (PASS + FIXED) * 100 / CHECKED ))
+#     else
+#       SCORE=0
+#     fi
+#     echo "========================================"
+#     echo "  ANSSI BP28 REMEDIATION SCORE"
+#     echo "========================================"
+#     echo "Total rules  : $TOTAL"
+#     echo "Passed       : $PASS"
+#     echo "Fixed        : $FIXED"
+#     echo "Failed       : $FAIL"
+#     echo "Not applicable: $NOTAPPL"
+#     echo "SCORE        : ${SCORE}%"
+#     echo "========================================"
+#   args:
+#     executable: /bin/bash
+#   register: anssi_score
+#   changed_when: false
+#
+# - name: "[REMEDIATE] Display ANSSI remediation score"
+#   ansible.builtin.debug:
+#     msg: "{{ anssi_score.stdout_lines }}"
 
 # --- Step 7: Fetch remediation reports ---
 - name: "[REMEDIATE] Ensure local reports directory"
@@ -175,8 +177,9 @@
   loop:
     - cis_remediation_report.html
     - cis_remediation_results.xml
-    - anssi_remediation_report.html
-    - anssi_remediation_results.xml
+    # NOTE: ANSSI profile not available in Ubuntu 22.04 SSG
+    # - anssi_remediation_report.html
+    # - anssi_remediation_results.xml
 
 - name: "[REMEDIATE] OpenSCAP auto-remediation complete"
   ansible.builtin.debug:
@@ -185,7 +188,7 @@
       ║      OPENSCAP AUTO-REMEDIATION — COMPLETE                   ║
       ╠══════════════════════════════════════════════════════════════╣
       ║ Host     : {{ inventory_hostname }}
-      ║ Profiles : CIS Level 1 Server + ANSSI BP28 Enhanced
+      ║ Profiles : CIS Level 1 Server
       ║ Mode     : --remediate (evaluate + auto-fix)
       ║ Reports  : reports/linux/
       ║                                                              ║

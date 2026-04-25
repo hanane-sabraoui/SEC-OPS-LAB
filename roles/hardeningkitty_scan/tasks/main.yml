@@ -52,6 +52,7 @@
 - name: "[HKITTY] Display download result"
   ansible.builtin.debug:
     msg: "{{ hk_download.stdout_lines }}"
+  when: hk_download is succeeded and hk_download.stdout_lines is defined
 
 # --- Step 3: Verify HardeningKitty module loads ---
 - name: "[HKITTY] Verify HardeningKitty module is loadable"

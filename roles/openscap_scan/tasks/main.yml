@@ -8,21 +8,22 @@
 # for Ubuntu 22.04. This produces an HTML report showing the
 # "before hardening" compliance score (Jalon 2 baseline).
 #
-# ANSSI profile is also available in SSG as xccdf_org.ssgproject.content_profile_anssi_bp28_enhanced
+# NOTE: ANSSI BP28 profile is not available in Ubuntu 22.04 SSG.
+# Only CIS Level 1 Server profile is used.
 # ============================================================
 
 # --- Step 1: Install required packages ---
 - name: "[OPENSCAP] Install OpenSCAP scanner and SSG content"
   ansible.builtin.apt:
     name:
-      - libopenscap8       # OpenSCAP library + oscap CLI
+      - libopenscap25      # OpenSCAP library + oscap CLI (Ubuntu 22.04+)
       - ssg-debderived     # SCAP Security Guide for Debian/Ubuntu
       - bzip2              # May be needed for OVAL content
     state: present
     update_cache: yes
     cache_valid_time: 3600
   # WHY: ssg-debderived provides ready-made XCCDF profiles
-  # (CIS, ANSSI) specifically tuned for Debian-based distros.
+  # (CIS) specifically tuned for Debian-based distros.
 
 # --- Step 2: Locate the SSG datastream file ---
 - name: "[OPENSCAP] Find SSG datastream file for Ubuntu"
@@ -33,7 +34,7 @@
 
 - name: "[OPENSCAP] Set datastream path"
   ansible.builtin.set_fact:
-    ssg_datastream: "{{ ssg_files.files | sort(attribute='path') | last | attr('path') }}"
+    ssg_datastream: "{{ (ssg_files.files | sort(attribute='path') | last).path }}"
   when: ssg_files.matched > 0
 
 - name: "[OPENSCAP] Fail if no SSG content found"
@@ -83,25 +84,26 @@
       XML results: /tmp/openscap_reports/cis_baseline_results.xml
 
 # --- Step 6: Run ANSSI BP28 Enhanced baseline scan ---
-- name: "[OPENSCAP] Run ANSSI BP28 Enhanced baseline scan"
-  ansible.builtin.command:
-    cmd: >
-      oscap xccdf eval
-      --profile xccdf_org.ssgproject.content_profile_anssi_bp28_enhanced
-      --report /tmp/openscap_reports/anssi_baseline_report.html
-      --results /tmp/openscap_reports/anssi_baseline_results.xml
-      {{ ssg_datastream }}
-  register: anssi_scan
-  failed_when: anssi_scan.rc == 1
-  changed_when: false
-
-- name: "[OPENSCAP] Display ANSSI scan summary"
-  ansible.builtin.debug:
-    msg: |
-      === ANSSI BP28 Baseline Scan Complete ===
-      Exit code: {{ anssi_scan.rc }} (0=all pass, 2=some fail)
-      HTML report: /tmp/openscap_reports/anssi_baseline_report.html
-      XML results: /tmp/openscap_reports/anssi_baseline_results.xml
+# NOTE: ANSSI profile not available in Ubuntu 22.04 SSG - commented out
+# - name: "[OPENSCAP] Run ANSSI BP28 Enhanced baseline scan"
+#   ansible.builtin.command:
+#     cmd: >
+#       oscap xccdf eval
+#       --profile xccdf_org.ssgproject.content_profile_anssi_bp28_enhanced
+#       --report /tmp/openscap_reports/anssi_baseline_report.html
+#       --results /tmp/openscap_reports/anssi_baseline_results.xml
+#       {{ ssg_datastream }}
+#   register: anssi_scan
+#   failed_when: anssi_scan.rc == 1
+#   changed_when: false
+#
+# - name: "[OPENSCAP] Display ANSSI scan summary"
+#   ansible.builtin.debug:
+#     msg: |
+#       === ANSSI BP28 Baseline Scan Complete ===
+#       Exit code: {{ anssi_scan.rc }} (0=all pass, 2=some fail)
+#       HTML report: /tmp/openscap_reports/anssi_baseline_report.html
+#       XML results: /tmp/openscap_reports/anssi_baseline_results.xml
 
 # --- Step 7: Generate score summary from XML ---
 - name: "[OPENSCAP] Extract CIS baseline score"
@@ -137,36 +139,37 @@
   ansible.builtin.debug:
     msg: "{{ cis_score_raw.stdout_lines }}"
 
-- name: "[OPENSCAP] Extract ANSSI baseline score"
-  ansible.builtin.shell: |
-    set -o pipefail
-    TOTAL=$(grep -c '<rule-result' /tmp/openscap_reports/anssi_baseline_results.xml 2>/dev/null || echo 0)
-    PASS=$(grep -c 'result">pass</result' /tmp/openscap_reports/anssi_baseline_results.xml 2>/dev/null || echo 0)
-    FAIL=$(grep -c 'result">fail</result' /tmp/openscap_reports/anssi_baseline_results.xml 2>/dev/null || echo 0)
-    NOTAPPL=$(grep -c 'result">notapplicable</result' /tmp/openscap_reports/anssi_baseline_results.xml 2>/dev/null || echo 0)
-    CHECKED=$((PASS + FAIL))
-    if [ "$CHECKED" -gt 0 ]; then
-      SCORE=$(( PASS * 100 / CHECKED ))
-    else
-      SCORE=0
-    fi
-    echo "========================================"
-    echo "  ANSSI BP28 BASELINE SCORE"
-    echo "========================================"
-    echo "Total rules    : $TOTAL"
-    echo "Passed         : $PASS"
-    echo "Failed         : $FAIL"
-    echo "Not applicable : $NOTAPPL"
-    echo "SCORE          : ${SCORE}%"
-    echo "========================================"
-  args:
-    executable: /bin/bash
-  register: anssi_score_raw
-  changed_when: false
-
-- name: "[OPENSCAP] Display ANSSI baseline score"
-  ansible.builtin.debug:
-    msg: "{{ anssi_score_raw.stdout_lines }}"
+# NOTE: ANSSI profile not available in Ubuntu 22.04 SSG - commented out
+# - name: "[OPENSCAP] Extract ANSSI baseline score"
+#   ansible.builtin.shell: |
+#     set -o pipefail
+#     TOTAL=$(grep -c '<rule-result' /tmp/openscap_reports/anssi_baseline_results.xml 2>/dev/null || echo 0)
+#     PASS=$(grep -c 'result">pass</result' /tmp/openscap_reports/anssi_baseline_results.xml 2>/dev/null || echo 0)
+#     FAIL=$(grep -c 'result">fail</result' /tmp/openscap_reports/anssi_baseline_results.xml 2>/dev/null || echo 0)
+#     NOTAPPL=$(grep -c 'result">notapplicable</result' /tmp/openscap_reports/anssi_baseline_results.xml 2>/dev/null || echo 0)
+#     CHECKED=$((PASS + FAIL))
+#     if [ "$CHECKED" -gt 0 ]; then
+#       SCORE=$(( PASS * 100 / CHECKED ))
+#     else
+#       SCORE=0
+#     fi
+#     echo "========================================"
+#     echo "  ANSSI BP28 BASELINE SCORE"
+#     echo "========================================"
+#     echo "Total rules    : $TOTAL"
+#     echo "Passed         : $PASS"
+#     echo "Failed         : $FAIL"
+#     echo "Not applicable : $NOTAPPL"
+#     echo "SCORE          : ${SCORE}%"
+#     echo "========================================"
+#   args:
+#     executable: /bin/bash
+#   register: anssi_score_raw
+#   changed_when: false
+#
+# - name: "[OPENSCAP] Display ANSSI baseline score"
+#   ansible.builtin.debug:
+#     msg: "{{ anssi_score_raw.stdout_lines }}"
 
 # --- Step 8: Fetch reports to control node ---
 - name: "[OPENSCAP] Ensure local reports directory exists"
@@ -183,11 +186,12 @@
     dest: "{{ playbook_dir }}/../reports/linux/{{ inventory_hostname }}_cis_baseline.html"
     flat: yes
 
-- name: "[OPENSCAP] Fetch ANSSI HTML report to control node"
-  ansible.builtin.fetch:
-    src: /tmp/openscap_reports/anssi_baseline_report.html
-    dest: "{{ playbook_dir }}/../reports/linux/{{ inventory_hostname }}_anssi_baseline.html"
-    flat: yes
+# NOTE: ANSSI profile not available in Ubuntu 22.04 SSG - commented out
+# - name: "[OPENSCAP] Fetch ANSSI HTML report to control node"
+#   ansible.builtin.fetch:
+#     src: /tmp/openscap_reports/anssi_baseline_report.html
+#     dest: "{{ playbook_dir }}/../reports/linux/{{ inventory_hostname }}_anssi_baseline.html"
+#     flat: yes
 
 - name: "[OPENSCAP] Fetch CIS XML results to control node"
   ansible.builtin.fetch:
@@ -195,11 +199,12 @@
     dest: "{{ playbook_dir }}/../reports/linux/{{ inventory_hostname }}_cis_baseline.xml"
     flat: yes
 
-- name: "[OPENSCAP] Fetch ANSSI XML results to control node"
-  ansible.builtin.fetch:
-    src: /tmp/openscap_reports/anssi_baseline_results.xml
-    dest: "{{ playbook_dir }}/../reports/linux/{{ inventory_hostname }}_anssi_baseline.xml"
-    flat: yes
+# NOTE: ANSSI profile not available in Ubuntu 22.04 SSG - commented out
+# - name: "[OPENSCAP] Fetch ANSSI XML results to control node"
+#   ansible.builtin.fetch:
+#     src: /tmp/openscap_reports/anssi_baseline_results.xml
+#     dest: "{{ playbook_dir }}/../reports/linux/{{ inventory_hostname }}_anssi_baseline.xml"
+#     flat: yes
 
 - name: "[OPENSCAP] Baseline scan complete — summary"
   ansible.builtin.debug:
@@ -208,7 +213,7 @@
       ║          OPENSCAP BASELINE SCAN — COMPLETE              ║
       ╠══════════════════════════════════════════════════════════╣
       ║ Host     : {{ inventory_hostname }}
-      ║ Profiles : CIS Level 1 Server + ANSSI BP28 Enhanced
+      ║ Profiles : CIS Level 1 Server
       ║ Reports fetched to: reports/linux/
       ║                                                         
       ║ Open the HTML files in a browser to see full scores.   

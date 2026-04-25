@@ -30,17 +30,18 @@
     msg: "CIS post-hardening scan exit code: {{ cis_rescan.rc }} (0=all pass, 2=some fail)"
 
 # --- ANSSI rescan ---
-- name: "[RESCAN] Run ANSSI BP28 Enhanced post-hardening scan"
-  ansible.builtin.command:
-    cmd: >
-      oscap xccdf eval
-      --profile xccdf_org.ssgproject.content_profile_anssi_bp28_enhanced
-      --report /tmp/openscap_reports/anssi_post_hardening_report.html
-      --results /tmp/openscap_reports/anssi_post_hardening_results.xml
-      {{ ssg_datastream | default('/usr/share/xml/scap/ssg/content/ssg-ubuntu2204-ds.xml') }}
-  register: anssi_rescan
-  failed_when: anssi_rescan.rc == 1
-  changed_when: false
+# NOTE: ANSSI profile not available in Ubuntu 22.04 SSG - commented out
+# - name: "[RESCAN] Run ANSSI BP28 Enhanced post-hardening scan"
+#   ansible.builtin.command:
+#     cmd: >
+#       oscap xccdf eval
+#       --profile xccdf_org.ssgproject.content_profile_anssi_bp28_enhanced
+#       --report /tmp/openscap_reports/anssi_post_hardening_report.html
+#       --results /tmp/openscap_reports/anssi_post_hardening_results.xml
+#       {{ ssg_datastream | default('/usr/share/xml/scap/ssg/content/ssg-ubuntu2204-ds.xml') }}
+#   register: anssi_rescan
+#   failed_when: anssi_rescan.rc == 1
+#   changed_when: false
 
 # --- Extract post-hardening scores ---
 - name: "[RESCAN] Extract CIS post-hardening score"
@@ -76,38 +77,39 @@
   ansible.builtin.debug:
     msg: "{{ cis_post_score.stdout_lines }}"
 
-- name: "[RESCAN] Extract ANSSI post-hardening score"
-  ansible.builtin.shell: |
-    set -o pipefail
-    TOTAL=$(grep -c '<rule-result' /tmp/openscap_reports/anssi_post_hardening_results.xml 2>/dev/null || echo 0)
-    PASS=$(grep -c 'result">pass</result' /tmp/openscap_reports/anssi_post_hardening_results.xml 2>/dev/null || echo 0)
-    FAIL=$(grep -c 'result">fail</result' /tmp/openscap_reports/anssi_post_hardening_results.xml 2>/dev/null || echo 0)
-    FIXED=$(grep -c 'result">fixed</result' /tmp/openscap_reports/anssi_post_hardening_results.xml 2>/dev/null || echo 0)
-    NOTAPPL=$(grep -c 'result">notapplicable</result' /tmp/openscap_reports/anssi_post_hardening_results.xml 2>/dev/null || echo 0)
-    CHECKED=$((PASS + FAIL + FIXED))
-    if [ "$CHECKED" -gt 0 ]; then
-      SCORE=$(( (PASS + FIXED) * 100 / CHECKED ))
-    else
-      SCORE=0
-    fi
-    echo "========================================"
-    echo "  ANSSI BP28 POST-HARDENING SCORE"
-    echo "========================================"
-    echo "Total rules    : $TOTAL"
-    echo "Passed         : $PASS"
-    echo "Fixed          : $FIXED"
-    echo "Failed         : $FAIL"
-    echo "Not applicable : $NOTAPPL"
-    echo "SCORE          : ${SCORE}%"
-    echo "========================================"
-  args:
-    executable: /bin/bash
-  register: anssi_post_score
-  changed_when: false
-
-- name: "[RESCAN] Display ANSSI post-hardening score"
-  ansible.builtin.debug:
-    msg: "{{ anssi_post_score.stdout_lines }}"
+# NOTE: ANSSI profile not available in Ubuntu 22.04 SSG - commented out
+# - name: "[RESCAN] Extract ANSSI post-hardening score"
+#   ansible.builtin.shell: |
+#     set -o pipefail
+#     TOTAL=$(grep -c '<rule-result' /tmp/openscap_reports/anssi_post_hardening_results.xml 2>/dev/null || echo 0)
+#     PASS=$(grep -c 'result">pass</result' /tmp/openscap_reports/anssi_post_hardening_results.xml 2>/dev/null || echo 0)
+#     FAIL=$(grep -c 'result">fail</result' /tmp/openscap_reports/anssi_post_hardening_results.xml 2>/dev/null || echo 0)
+#     FIXED=$(grep -c 'result">fixed</result' /tmp/openscap_reports/anssi_post_hardening_results.xml 2>/dev/null || echo 0)
+#     NOTAPPL=$(grep -c 'result">notapplicable</result' /tmp/openscap_reports/anssi_post_hardening_results.xml 2>/dev/null || echo 0)
+#     CHECKED=$((PASS + FAIL + FIXED))
+#     if [ "$CHECKED" -gt 0 ]; then
+#       SCORE=$(( (PASS + FIXED) * 100 / CHECKED ))
+#     else
+#       SCORE=0
+#     fi
+#     echo "========================================"
+#     echo "  ANSSI BP28 POST-HARDENING SCORE"
+#     echo "========================================"
+#     echo "Total rules    : $TOTAL"
+#     echo "Passed         : $PASS"
+#     echo "Fixed          : $FIXED"
+#     echo "Failed         : $FAIL"
+#     echo "Not applicable : $NOTAPPL"
+#     echo "SCORE          : ${SCORE}%"
+#     echo "========================================"
+#   args:
+#     executable: /bin/bash
+#   register: anssi_post_score
+#   changed_when: false
+#
+# - name: "[RESCAN] Display ANSSI post-hardening score"
+#   ansible.builtin.debug:
+#     msg: "{{ anssi_post_score.stdout_lines }}"
 
 # --- Fetch reports ---
 - name: "[RESCAN] Ensure local reports directory exists"
@@ -125,9 +127,10 @@
     flat: yes
   loop:
     - cis_post_hardening_report.html
-    - anssi_post_hardening_report.html
+    # NOTE: ANSSI profile not available in Ubuntu 22.04 SSG
+    # - anssi_post_hardening_report.html
     - cis_post_hardening_results.xml
-    - anssi_post_hardening_results.xml
+    # - anssi_post_hardening_results.xml
 
 - name: "[RESCAN] Post-hardening scan complete"
   ansible.builtin.debug:
@@ -137,6 +140,5 @@
       ╠══════════════════════════════════════════════════════════════╣
       ║ Host     : {{ inventory_hostname }}
       ║ CIS      : exit {{ cis_rescan.rc }}
-      ║ ANSSI    : exit {{ anssi_rescan.rc }}
       ║ Compare HTML reports in reports/linux/ (baseline vs post)
       ╚══════════════════════════════════════════════════════════════╝

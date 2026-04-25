@@ -13,7 +13,10 @@ ansible_port: 22
 # Privilege escalation
 ansible_become: yes
 ansible_become_method: sudo
-ansible_become_password: "{{ vault_become_password }}"
+ansible_become_password: azerty@123
 
 # Python interpreter - Ubuntu 22.04 ships python3
 ansible_python_interpreter: /usr/bin/python3
+
+# Force remote temp to user's home directory to avoid /tmp permission issues
+ansible_remote_tmp: $HOME/.ansible/tmp

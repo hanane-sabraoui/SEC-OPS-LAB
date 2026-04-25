@@ -12,71 +12,53 @@
 # Run: ansible-playbook playbooks/full_pipeline.yml
 # ============================================================
 
-# ===== LINUX =====
-
-- name: "PIPELINE — Linux: Connectivity Check"
-  hosts: linux_servers
-  gather_facts: no
-  roles:
-    - common
-    - linux_baseline
-
-- name: "PIPELINE — Linux: Baseline OpenSCAP Scan"
-  hosts: linux_servers
-  gather_facts: no
-  roles:
-    - openscap_scan
-
-- name: "PIPELINE — Linux: CIS/ANSSI Manual Hardening"
-  hosts: linux_servers
-  gather_facts: yes
-  roles:
-    - linux_hardening
-
-- name: "PIPELINE — Linux: OpenSCAP Auto-Remediation"
-  hosts: linux_servers
-  gather_facts: yes
-  roles:
-    - openscap_remediate
-
-- name: "PIPELINE — Linux: Post-Hardening OpenSCAP Rescan"
-  hosts: linux_servers
-  gather_facts: no
-  roles:
-    - openscap_rescan
-
 # ===== WINDOWS =====
+# NOTE: ignore_unreachable set to allow pipeline to continue if Windows machines are unavailable
 
 - name: "PIPELINE — Windows: Connectivity Check"
   hosts: windows_machines
   gather_facts: no
+  ignore_unreachable: yes
   roles:
     - common
+
+- name: "PIPELINE — Windows: Baseline Information Gathering"
+  hosts: windows_machines
+  gather_facts: no
+  ignore_unreachable: yes
+  roles:
     - windows_baseline
 
 - name: "PIPELINE — Windows: Baseline HardeningKitty Scan"
   hosts: windows_machines
   gather_facts: no
+  ignore_unreachable: yes
   roles:
     - hardeningkitty_scan
 
 - name: "PIPELINE — Windows: CIS Manual Hardening"
   hosts: windows_machines
   gather_facts: no
+  ignore_unreachable: yes
   roles:
     - windows_hardening
 
 - name: "PIPELINE — Windows: HardeningKitty HailMary Auto-Remediation"
   hosts: windows_machines
   gather_facts: no
+  ignore_unreachable: yes
   roles:
     - hardeningkitty_remediate
 
 - name: "PIPELINE — Windows: Post-Hardening HardeningKitty Rescan"
   hosts: windows_machines
   gather_facts: no
+  ignore_unreachable: yes
   roles:
     - hardeningkitty_rescan
+
+
+
 
 # ===== PHONES =====
 
@@ -85,6 +67,11 @@
   gather_facts: no
   roles:
     - common
+
+- name: "PIPELINE — Phones: Baseline Information Gathering"
+  hosts: phones
+  gather_facts: no
+  roles:
     - phone_check
 
 
@@ -115,3 +102,41 @@
 
 
 
+
+# ===== LINUX =====
+
+- name: "PIPELINE — Linux: Connectivity Check"
+  hosts: linux_servers
+  gather_facts: no
+  roles:
+    - common
+
+- name: "PIPELINE — Linux: Baseline Information Gathering"
+  hosts: linux_servers
+  gather_facts: no
+  roles:
+    - linux_baseline
+
+- name: "PIPELINE — Linux: Baseline OpenSCAP Scan"
+  hosts: linux_servers
+  gather_facts: no
+  roles:
+    - openscap_scan
+
+- name: "PIPELINE — Linux: CIS/ANSSI Manual Hardening"
+  hosts: linux_servers
+  gather_facts: yes
+  roles:
+    - linux_hardening
+
+- name: "PIPELINE — Linux: OpenSCAP Auto-Remediation"
+  hosts: linux_servers
+  gather_facts: yes
+  roles:
+    - openscap_remediate
+
+- name: "PIPELINE — Linux: Post-Hardening OpenSCAP Rescan"
+  hosts: linux_servers
+  gather_facts: no
+  roles:
+    - openscap_rescan

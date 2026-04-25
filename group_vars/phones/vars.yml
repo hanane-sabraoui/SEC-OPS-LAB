@@ -12,7 +12,7 @@
 ansible_connection: ssh
 ansible_port: 8022
 ansible_user: u0_a338
-ansible_password: "{{ vault_phone_password }}"
+ansible_password: azerty@123
 
 # Termux python path
 ansible_python_interpreter: /data/data/com.termux/files/usr/bin/python3

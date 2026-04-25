@@ -3,19 +3,21 @@
 # Role: windows_baseline — Win Server 2019 / Win 10 baseline
 # ============================================================
 # WHY: Same rationale as linux_baseline — capture a "before"
-# snapshot. Because we connect via SSH with powershell shell
-# type, we use raw PowerShell commands rather than WinRM-based
-# win_* modules (which require WinRM, not SSH).
+# snapshot. We connect via WinRM and use win_shell modules
+# to gather Windows system information.
 # ============================================================
 
-- name: "[WINDOWS] Verify PowerShell is available via SSH"
+- name: "[WINDOWS] Verify PowerShell is available via WinRM"
   ansible.windows.win_shell: '$PSVersionTable.PSVersion.ToString()'
   register: ps_version
   changed_when: false
+  ignore_errors: yes
+  ignore_unreachable: yes
 
 - name: "[WINDOWS] Display PowerShell version"
   ansible.builtin.debug:
     msg: "PowerShell version: {{ ps_version.stdout | trim }}"
+  when: ps_version is succeeded and ps_version.stdout is defined
 
 - name: "[WINDOWS] Gather OS information"
   ansible.windows.win_shell: |
@@ -26,44 +28,84 @@
     Write-Output "Build    : $($os.BuildNumber)"
   register: os_info
   changed_when: false
+  ignore_errors: yes
+  ignore_unreachable: yes
 
 - name: "[WINDOWS] Display OS information"
   ansible.builtin.debug:
     msg: "{{ os_info.stdout_lines }}"
+  when: os_info is succeeded and os_info.stdout_lines is defined
 
-- name: "[WINDOWS] Check SSH service status"
-  ansible.windows.win_shell: 'Get-Service -Name sshd | Select-Object -Property Status, DisplayName | Format-List'
-  register: ssh_svc
+- name: "[WINDOWS] Check WinRM service status"
+  ansible.windows.win_shell: 'Get-Service -Name WinRM | Select-Object -Property Status, DisplayName | Format-List'
+  register: winrm_svc
   changed_when: false
+  ignore_errors: yes
+  ignore_unreachable: yes
 
-- name: "[WINDOWS] Display SSH service status"
+- name: "[WINDOWS] Display WinRM service status"
   ansible.builtin.debug:
-    msg: "{{ ssh_svc.stdout_lines }}"
+    msg: "{{ winrm_svc.stdout_lines }}"
+  when: winrm_svc is succeeded and winrm_svc.stdout_lines is defined
 
 - name: "[WINDOWS] List listening TCP ports"
   ansible.windows.win_shell: 'Get-NetTCPConnection -State Listen | Select-Object LocalAddress, LocalPort, OwningProcess | Sort-Object LocalPort | Format-Table -AutoSize'
   register: win_ports
   changed_when: false
+  ignore_errors: yes
+  ignore_unreachable: yes
 
 - name: "[WINDOWS] Display listening ports"
   ansible.builtin.debug:
     msg: "{{ win_ports.stdout_lines }}"
+  when: win_ports is succeeded and win_ports.stdout_lines is defined
 
 - name: "[WINDOWS] Check Windows Firewall status"
   ansible.windows.win_shell: 'Get-NetFirewallProfile | Select-Object Name, Enabled | Format-Table -AutoSize'
   register: fw_status
   changed_when: false
+  ignore_errors: yes
+  ignore_unreachable: yes
 
 - name: "[WINDOWS] Display firewall profiles"
   ansible.builtin.debug:
     msg: "{{ fw_status.stdout_lines }}"
+  when: fw_status is succeeded and fw_status.stdout_lines is defined
 
 - name: "[WINDOWS] Detect installed security software"
   ansible.windows.win_shell: 'Get-CimInstance -Namespace root/SecurityCenter2 -ClassName AntiVirusProduct -ErrorAction SilentlyContinue | Select-Object displayName | Format-Table -AutoSize'
   register: av_info
   changed_when: false
   ignore_errors: yes
+  ignore_unreachable: yes
 
 - name: "[WINDOWS] Display security software"
   ansible.builtin.debug:
     msg: "{{ av_info.stdout_lines | default(['SecurityCenter2 not available on Server SKUs']) }}"
+  when: av_info is succeeded
+
+- name: "[WINDOWS] Connection status summary"
+  ansible.builtin.debug:
+    msg: |
+      ╔══════════════════════════════════════════════════════════╗
+      ║       WINDOWS BASELINE - STATUS                         ║
+      ╠══════════════════════════════════════════════════════════╣
+      {% if ps_version is succeeded %}
+      ║ ✓ WinRM Connection: WORKING                             ║
+      ║ ✓ Host: {{ inventory_hostname }}                        ║
+      {% else %}
+      ║ ✗ WinRM Connection: FAILED                              ║
+      ║ ✗ Host: {{ inventory_hostname }} ({{ ansible_host }})   ║
+      ║                                                          ║
+      ║   To enable WinRM on the Windows machine, run in        ║
+      ║   PowerShell as Administrator:                          ║
+      ║                                                          ║
+      ║   Enable-PSRemoting -Force                              ║
+      ║   Set-Item WSMan:\localhost\Service\Auth\Basic $true    ║
+      ║   winrm set winrm/config/service/auth @{Basic="true"}   ║
+      ║   winrm set winrm/config/service @{AllowUnencrypted="true"} ║
+      ║   New-NetFirewallRule -Name "WinRM-HTTP" -DisplayName   ║
+      ║     "WinRM HTTP" -Enabled True -Direction Inbound       ║
+      ║     -Protocol TCP -LocalPort 5985                       ║
+      {% endif %}
+      ╚══════════════════════════════════════════════════════════╝

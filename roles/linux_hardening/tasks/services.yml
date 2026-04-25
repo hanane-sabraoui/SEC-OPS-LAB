@@ -28,13 +28,18 @@
   # WHY: rsync can leak files if misconfigured — only enable when needed
 
 # --- CIS 2.2.15: Ensure mail transfer agent is local-only ---
+- name: "[SERVICES] Check if Postfix is installed"
+  ansible.builtin.stat:
+    path: /etc/postfix/main.cf
+  register: postfix_config
+
 - name: "[SERVICES] Configure Postfix to listen on localhost only"
   ansible.builtin.lineinfile:
     path: /etc/postfix/main.cf
     regexp: "^inet_interfaces"
     line: "inet_interfaces = loopback-only"
     state: present
-  ignore_errors: yes
+  when: postfix_config.stat.exists
   notify: restart postfix
   # WHY: MTA open to the network can be abused as a spam relay
 
